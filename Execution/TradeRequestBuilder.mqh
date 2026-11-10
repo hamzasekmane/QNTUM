@@ -34,6 +34,8 @@ bool CTradeRequestBuilder::Build(MqlTradeRequest &req, const STradePlan &plan,
    ZeroMemory(req);
 
    if(plan.volume <= 0.0) { why = "volume is zero"; return(false); }
+   if(fillingMode < (int)ORDER_FILLING_FOK || fillingMode > (int)ORDER_FILLING_RETURN)
+     { why = "no supported filling mode for this symbol"; return(false); }
    if(!QmeStopIsValid(plan.side, plan.entry, plan.stopLoss))
      { why = "stop invalid for this side"; return(false); }
    if(!QmeTargetIsValid(plan.side, plan.entry, plan.takeProfit))

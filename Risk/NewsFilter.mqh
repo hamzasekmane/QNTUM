@@ -60,8 +60,19 @@ bool CNewsFilter::Blocked(const CConfig &cfg, const datetime gmtTime, string &wh
       if(h1 < 0 || h1 > 23 || h2 < 0 || h2 > 23 || m1 < 0 || m1 > 59 || m2 < 0 || m2 > 59)
          continue;
 
-      const int startMin = h1 * 60 + m1;
-      const int endMin   = h2 * 60 + m2;
+      //--- widen the window by the configured blackout margin on both sides
+      const int margin = (cfg.In.newsBlackoutMinutes > 0) ? cfg.In.newsBlackoutMinutes : 0;
+      const int rawStart = h1 * 60 + m1;
+      const int rawEnd   = h2 * 60 + m2;
+      const int rawLen   = (rawEnd >= rawStart) ? (rawEnd - rawStart)
+                                                : (rawEnd + 1440 - rawStart);
+      if(rawLen + 2 * margin >= 1440)
+        {
+         why = "news blackout window " + parts[i] + " widened to a full day";
+         return(true);
+        }
+      const int startMin = (rawStart - margin + 1440) % 1440;
+      const int endMin   = (rawEnd + margin) % 1440;
       const bool inside = (startMin <= endMin) ? (nowMin >= startMin && nowMin <= endMin)
                                                : (nowMin >= startMin || nowMin <= endMin);
       if(inside)

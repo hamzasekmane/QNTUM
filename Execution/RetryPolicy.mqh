@@ -41,12 +41,12 @@ bool CRetryPolicy::RequiresReconciliation(const uint retcode)
   }
 
 //------------------------------------------------------------------//
-int CRetryPolicy::DelayMs(const uint retcode, const int attempt)
+int CRetryPolicy::DelayMs(const uint retcode, const int attempt, const int baseMs)
   {
-   int base = 250;
+   int base = (baseMs > 0) ? baseMs : 250;
    const ENUM_QME_RETRY_CLASS c = QmeClassifyRetcode(retcode);
    if(c == QME_RETRY_TRANSIENT && retcode == TRADE_RETCODE_TOO_MANY_REQUESTS)
-      base = 1000;
+      base = (base > 1000) ? base : 1000;
    const int mult = (attempt <= 1) ? 1 : (attempt == 2 ? 2 : 3);
    return(base * mult);
   }

@@ -107,6 +107,8 @@ private:
    long               m_trades;
    long               m_errors;
    long               m_rejections;
+   int                m_signalsToday;   // generated since m_signalDay (server day)
+   datetime           m_signalDay;
 
    bool               ApplySignalState(const ulong id, const ENUM_QME_SIGNAL_STATE to,
                                        const ENUM_QME_REJECT reason, const string note);
@@ -165,6 +167,8 @@ CEngine::CEngine(void)
    m_trades = 0;
    m_errors = 0;
    m_rejections = 0;
+   m_signalsToday = 0;
+   m_signalDay = 0;
   }
 
 //------------------------------------------------------------------//
@@ -707,16 +711,26 @@ bool CEngine::Cycle(const bool force, string &note)
          continue;
         }
 
+      //--- daily signal cap: counted per server day since engine start
+      const datetime dayKey = TimeCurrent() - (TimeCurrent() % 86400);
+      if(dayKey != m_signalDay) { m_signalDay = dayKey; m_signalsToday = 0; }
+      if(m_cfg.In.maxSignalsPerDay > 0 && m_signalsToday >= m_cfg.In.maxSignalsPerDay)
+        {
+         m_funnel.Drop(m_funnel.Stage("generate"), "daily signal cap reached");
+         continue;
+        }
+
       STradingSignal sigs[];
       const int n = m_signals.Generate(rt.analysis[1], rt.analysis[2], rt.analysis[3],
                                        rt.analysis[4], rt.zones, rt.spec, m_cfg,
-                                       m_registry, sigs);
+                                       rt.quality, m_registry, sigs);
       if(n <= 0) continue;
 
       for(int k = 0; k < n; k++)
         {
          signalsThisCycle++;
          m_signalsTotal++;
+         m_signalsToday++;
 
          SDecision dec;
          const double atr = rt.analysis[4].atr > 0.0 ? rt.analysis[4].atr : rt.analysis[3].atr;

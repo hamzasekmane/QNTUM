@@ -36,17 +36,19 @@ for p, s in src.items():
     for m in re.finditer(r'\b(class|struct)\s+(\w+)\s*(?::\s*public\s+(\w+))?\s*\{', s):
         kind, name, base = m.group(1), m.group(2), m.group(3)
         body = block(s, m.end() - 1)
-        members, methods = set(), set()
+        members, methods, member_types = set(), set(), {}
         for d in re.finditer(r'([A-Za-z_]\w*(?:\s*\*)?)\s+([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*(?:\(([^;{}]*)\))?\s*(?:;|\{)', body):
             nm = d.group(2)
             if nm == name:
                 continue
             members.add(nm)
+            member_types[nm] = d.group(1).replace('*', '').strip()
             if d.group(3) is not None or d.group(0).rstrip().endswith('{'):
                 methods.add(nm)
-        t = types.setdefault(name, dict(members=set(), methods=set(), base=base, file=str(p.relative_to(ROOT))))
+        t = types.setdefault(name, dict(members=set(), methods=set(), member_types={}, base=base, file=str(p.relative_to(ROOT))))
         t['members'] |= members
         t['methods'] |= methods
+        t['member_types'].update(member_types)
         if base:
             t['base'] = base
 
@@ -63,7 +65,20 @@ def members_of(t, seen=None):
         meth |= bmeth
     return mem, meth
 
-DECL = re.compile(r'\b([A-Z]\w+)\s*(?:&|\*)?\s+([a-z_]\w*)\s*(?:\[[^\]]*\])?\s*(?:[;=,)]|$)')
+DECL = re.compile(r'\b([A-Z]\w+)\s*(?:&|\*)?\s*([a-z_]\w*)\s*(?:\[[^\]]*\])?\s*(?:[;=,)]|$)')
+
+def member_type(t, member, seen=None):
+    """Declared type of a data member, following base classes."""
+    seen = seen or set()
+    if t not in types or t in seen:
+        return None
+    seen.add(t)
+    info = types[t]
+    if member in info['member_types']:
+        return info['member_types'][member]
+    if info['base']:
+        return member_type(info['base'], member, seen)
+    return None
 
 problems = []
 for p, s in src.items():
@@ -72,10 +87,11 @@ for p, s in src.items():
         if m.group(1) in types:
             decls.append((m.start(), m.group(2), m.group(1)))
     decls.sort()
-    for m in re.finditer(r'\b([a-z_]\w*)\.([A-Za-z_]\w*)\b', s):
-        var, mem = m.group(1), m.group(2)
+    for m in re.finditer(r'\b([a-z_]\w*)((?:\.[A-Za-z_]\w*)+)\b', s):
+        var = m.group(1)
+        chain = [c for c in m.group(2).split('.') if c]
         if m.start() > 0 and s[m.start() - 1] == '.':
-            continue                             # field chain, not a variable
+            continue                             # middle of a longer chain
         t = None
         for pos, name, typ in decls:               # nearest declaration before use
             if name != var:
@@ -85,13 +101,21 @@ for p, s in src.items():
             t = typ
         if not t:
             continue
-        mems, meths = members_of(t)
-        if not mems and not meths:
-            continue
-        if mem in mems or mem in meths:
-            continue
         line = s[:m.start()].count('\n') + 1
-        problems.append((str(p.relative_to(ROOT)), line, t, var, mem))
+        cur = t
+        for depth, mem in enumerate(chain):
+            mems, meths = members_of(cur)
+            if not mems and not meths:
+                break
+            if mem in meths and mem not in mems:
+                break                            # method call: return type unknown
+            if mem not in mems:
+                problems.append((str(p.relative_to(ROOT)), line, cur, var, mem))
+                break
+            nxt = member_type(cur, mem)
+            if nxt not in types:
+                break
+            cur = nxt
 
 seen = set()
 for row in sorted(set(problems)):

@@ -15,6 +15,7 @@
 #include "../Core/ErrorCodes.mqh"
 #include "../Core/Logger.mqh"
 #include "../Account/SymbolSpecifications.mqh"
+#include "../Account/BrokerCapabilities.mqh"
 #include "PositionReconciler.mqh"
 
 class CTradeManager
@@ -190,7 +191,10 @@ bool CTradeManager::ClosePosition(const ulong ticket, const double volume,
    req.position = ticket;
    req.volume = vol;
    req.deviation = (uint)MathMax(deviationPoints, 0);
-   req.type_filling = (ENUM_ORDER_TYPE_FILLING)spec.fillingMode;
+   const int closeFill = CBrokerCapabilities::ChooseFilling(spec,
+                             isBuy ? ORDER_TYPE_SELL : ORDER_TYPE_BUY);
+   req.type_filling = (closeFill >= 0) ? (ENUM_ORDER_TYPE_FILLING)closeFill
+                                       : ORDER_FILLING_RETURN;
    req.magic = (ulong)PositionGetInteger(POSITION_MAGIC);
    req.comment = QME_ORDER_COMMENT;
    if(isBuy)

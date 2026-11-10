@@ -77,14 +77,16 @@ int RunExecutionTests(void)
    noStop.stopLoss = 0.0;
    MqlTradeRequest req;
    string buildWhy = "";
-   const bool built = CTradeRequestBuilder::Build(req, noStop, spec, spec.fillingMask, 20,
+   const bool built = CTradeRequestBuilder::Build(req, noStop, spec,
+                                                  CBrokerCapabilities::ChooseFilling(spec, ORDER_TYPE_BUY), 20,
                                                   "QME", buildWhy);
    g_kit.Check(!built, "builder refuses a plan without a stop");
    g_kit.Check(StringLen(buildWhy) > 0, "builder explains the refusal");
 
    //--- a valid plan builds a request with both protections
    STradePlan good = ExecPlan(spec, QME_SIDE_BUY);
-   if(!CTradeRequestBuilder::Build(req, good, spec, spec.fillingMask, 20, "QME", buildWhy))
+   if(!CTradeRequestBuilder::Build(req, good, spec,
+                                   CBrokerCapabilities::ChooseFilling(spec, ORDER_TYPE_BUY), 20, "QME", buildWhy))
      {
       g_kit.Skip("no live tick to build a market request: " + buildWhy);
      }

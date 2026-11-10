@@ -63,8 +63,8 @@ public:
    int               Generate(const SMarketAnalysis &bias, const SMarketAnalysis &structure,
                               const SMarketAnalysis &setup, const SMarketAnalysis &entryTf,
                               CZoneEngine &zones, const SSymbolSpec &spec,
-                              const CConfig &cfg, CSignalRegistry &registry,
-                              STradingSignal &out[]);
+                              const CConfig &cfg, const SDataQuality &dq,
+                              CSignalRegistry &registry, STradingSignal &out[]);
 
    string            Stats(void);
   };
@@ -176,8 +176,8 @@ int CSignalEngine::BuildViews(const SMarketAnalysis &bias, const SMarketAnalysis
 int CSignalEngine::Generate(const SMarketAnalysis &bias, const SMarketAnalysis &structure,
                             const SMarketAnalysis &setup, const SMarketAnalysis &entryTf,
                             CZoneEngine &zones, const SSymbolSpec &spec,
-                            const CConfig &cfg, CSignalRegistry &registry,
-                            STradingSignal &out[])
+                            const CConfig &cfg, const SDataQuality &dq,
+                            CSignalRegistry &registry, STradingSignal &out[])
   {
    ArrayResize(out, 0);
    if(m_scorer == NULL || m_strategies == NULL || m_lifecycle == NULL)
@@ -220,7 +220,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &bias, const SMarketAnalysis &
                                                                     views, nViews);
 
       //--- 4. setup gate
-      const SSetupVerdict verdict = CSetupEngine::Evaluate(merged[i], conf, cfg, setup.quality);
+      const SSetupVerdict verdict = CSetupEngine::Evaluate(merged[i], conf, cfg, dq);
 
       //--- build the signal record up front so a rejection is recorded, not lost
       STradingSignal sig;
@@ -325,7 +325,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &bias, const SMarketAnalysis &
       const double spreadCap = (cfg.In.maxSpreadAtrRatio > 0.0) ? atr / point * cfg.In.maxSpreadAtrRatio : 0.0;
       const SQualityResult q = CSignalQualityEngine::Evaluate(finalScore, conf.score, sig.rr,
                                                               cfg.In.minRR, setup.spreadPoints,
-                                                              spreadCap, setup.quality,
+                                                              spreadCap, dq,
                                                               0.55);
       if(!q.acceptable)
         {

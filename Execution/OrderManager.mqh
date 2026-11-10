@@ -44,7 +44,7 @@ void COrderManager::ApplyResult(const MqlTradeResult &r, SExecutionResult &res)
 bool COrderManager::Send(MqlTradeRequest &req, const CConfig &cfg, SExecutionResult &res)
   {
    res.attempts = 0;
-   const int maxRetries = MathMax(cfg.In.maxExecutionRetries, 0);
+   const int maxRetries = MathMax(cfg.In.maxRetries, 0);
 
    while(true)
      {
@@ -120,7 +120,7 @@ bool COrderManager::Send(MqlTradeRequest &req, const CConfig &cfg, SExecutionRes
 
       if(CRetryPolicy::ShouldRetry(tr.retcode, res.attempts, maxRetries))
         {
-         const int delay = CRetryPolicy::DelayMs(tr.retcode, res.attempts);
+         const int delay = CRetryPolicy::DelayMs(tr.retcode, res.attempts, cfg.In.retryDelayMs);
          QmeLogMsg(QME_LOG_WARN, "Order", req.symbol + " retcode " +
                    IntegerToString((int)tr.retcode) + " retrying in " +
                    IntegerToString(delay) + "ms");

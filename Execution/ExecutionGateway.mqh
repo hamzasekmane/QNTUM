@@ -171,7 +171,9 @@ bool CExecutionGateway::Execute(const STradePlan &plan, const SSymbolSpec &spec,
    //--- 3. request
    MqlTradeRequest req;
    string buildWhy = "";
-   if(!CTradeRequestBuilder::Build(req, plan, spec, spec.fillingMode,
+   const int filling = CBrokerCapabilities::ChooseFilling(spec,
+                             (plan.side == QME_SIDE_BUY) ? ORDER_TYPE_BUY : ORDER_TYPE_SELL);
+   if(!CTradeRequestBuilder::Build(req, plan, spec, filling,
                                    cfg.In.deviationPoints, QME_ORDER_COMMENT, buildWhy))
      {
       res.state = QME_EXEC_FAILED;

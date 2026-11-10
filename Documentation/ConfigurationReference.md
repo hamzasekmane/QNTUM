@@ -75,7 +75,7 @@ An account whose type cannot be determined is never authorized.
 | `sessionFilterEnabled` | `false` | enable session policy |
 | `allowSessionAsia/London/NewYork/Overlap` | `true` | per-session permission |
 | `newsFilterEnabled` | `false` | enable blackout |
-| `newsBlackoutMinutes` | `30` | informational window size |
+| `newsBlackoutMinutes` | `30` | minutes added on both sides of every configured blackout window |
 | `newsBlackoutWindows` | `""` | `HH:MM-HH:MM;HH:MM-HH:MM` in **GMT** |
 
 ## 7. Strategy
@@ -85,7 +85,7 @@ An account whose type cannot be determined is never authorized.
 | `minScore` | `55.0` | 0..100 |
 | `minConfluence` | `0.40` | MTF agreement |
 | `requireHtfAlignment` | `true` | bias must agree with setup |
-| `maxSignalsPerDay` | `12` | daily cap |
+| `maxSignalsPerDay` | `12` | max signals generated per server day, counted from engine start (not persisted across restarts) |
 | `signalExpiryMinutes` | `240` | signal lifetime |
 | `cooldownSecPerSymbol` | `900` | per-symbol rest after a trade |
 | `zoneMaxAgeHours` | `72` | zone retention |
