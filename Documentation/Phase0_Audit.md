@@ -191,15 +191,18 @@ $ python3 Tools/mql5fields.py
 -- 0 suspicious member access(es); this is a heuristic, not a compiler
 ```
 
-The checker validates include guards, brace/parenthesis balance, duplicate type
-declarations, unknown identifiers, misplaced `input` declarations and empty
-files. It is a structural check only.
+`mql5check.py` validates include guards, brace/parenthesis balance, duplicate
+type declarations, unknown identifiers, misplaced `input` declarations and empty
+files. `mql5fields.py` resolves each `variable.member` access against the
+declared type, including base classes, and reports members the type does not
+declare; it found four genuine mismatches during development, all fixed. Both are
+static heuristics — neither is a compiler.
 
 ### Verification NOT performed (and why)
 
 * **Compilation** — no MetaEditor, no MT5 terminal, no Wine in the build
   environment. No compilation result is claimed anywhere in this repository.
-* **Test execution** — the 17 test programs have never been run here. They are
+* **Test execution** — the 18 test programs have never been run here. They are
   written to fail loudly (`INIT_FAILED`) and to `SKIP` (never pass) when the
   environment lacks market data.
 * **Backtests / forward tests** — none exist and none are reported.
@@ -216,4 +219,5 @@ progression from analysis mode to DEMO to REAL.
 | `CReplayEngine` replays *decisions*, not market data | market frames are not stored; the audit checks decision invariants, and the documentation says so explicitly |
 | `CCorrelationRisk` is a heuristic table, not a covariance model | honest labelling beats a fake statistics module |
 | `CNewsFilter` uses configured GMT windows only | no economic calendar is bundled or fabricated |
+| Nine utility classes are implemented but not yet called from the runtime path: `CConfidenceCalibration`, `COutcomeAnalyzer`, `CProbabilityModel`, `CPocEngine`, `CPlanLifecycle`, `CEventScheduler`, `CQmeStringList`, `CQmeTicketList`, `CHistoryValidator` | they are self-contained, compile-ready helpers with no side effects. Wiring them into the live cycle would change behaviour (calibration would rewrite scores, `POC` would add levels, `PlanLifecycle` duplicates plan validation already inside `CRiskEngine`), so they are left as documented library code rather than being forced into a path whose effect has not been verified by a compiler or a backtest |
 | `closeOnOppositeSignal` and `breakEvenAtR` are off by default | both are implemented (ExecutionSpecification §7.1–7.2) but disabled until an operator opts in; no default behaviour closes a position or moves a stop |

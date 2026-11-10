@@ -39,6 +39,7 @@
 #include "../Strategy/SignalDeduplicator.mqh"
 #include "../Strategy/SignalExpiry.mqh"
 #include "../Strategy/StrategyRegistry.mqh"
+#include "../Output/ExplanationEngine.mqh"
 #include "../Strategy/DecisionEngine.mqh"
 #include "../Risk/RiskEngine.mqh"
 #include "../Execution/ExecutionGateway.mqh"
@@ -566,6 +567,9 @@ void CEngine::RecordDecision(const SDecision &d, const long cycle)
    f.reason = d.reason;
    f.fingerprint = d.plan.fingerprint;
    m_replay.Record(f);
+
+   //--- one human-readable line per decision, at debug level
+   QmeLogDebug("Engine", CExplanationEngine::OneLine(d));
 
    if(!f.approved) m_rejections++;
   }
