@@ -163,7 +163,7 @@ Interfaces defined before bodies; each file compilable at the end of the phase.
 
 ## 8. Delivery status against this plan (as implemented)
 
-The plan above was executed in order. Final tree: **182 MQL5 source files, all
+The plan above was executed in order. Final tree: **184 MQL5 source files, all
 non-empty, 25k+ lines**, plus 9 reports in `Documentation/`.
 
 | Phase | Scope | Status |
@@ -178,13 +178,13 @@ non-empty, 25k+ lines**, plus 9 reports in `Documentation/`.
 | 7 | `Execution/` (11) | done |
 | 8 | `Persistence/` (7) | done |
 | 9 | `Runtime/` (8), `Monitoring/` (6), `Output/` (7) | done |
-| 10 | `QME.mqh`, `QME_Main.mq5`, `Tests/` (17 programs), documentation | done |
+| 10 | `QME.mqh`, `QME_Main.mq5`, `Tests/` (18 programs), documentation | done |
 
 ### Verification actually performed
 
 ```
 $ python3 Tools/mql5check.py
-scanned 182 files (182 implemented, 0 empty)
+scanned 184 files (184 implemented, 0 empty)
 OK: no structural errors detected (this is NOT a compilation proof)
 
 $ python3 Tools/mql5fields.py

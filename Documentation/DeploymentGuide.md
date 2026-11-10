@@ -8,7 +8,7 @@ MT5 terminal and without Wine**. Therefore:
 * **the code has not been compiled by the author of these files**;
 * no backtest or live result is reported anywhere;
 * the only automated verification performed is structural:
-  `python3 Tools/mql5check.py` → `scanned 182 files (182 implemented, 0 empty)` /
+  `python3 Tools/mql5check.py` → `scanned 184 files (184 implemented, 0 empty)` /
   `OK: no structural errors detected (this is NOT a compilation proof)`.
 
 Treat the first compile as a required step, not a formality.

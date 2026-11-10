@@ -106,6 +106,7 @@ bool CCanonicalSnapshot::Deserialize(const string line, SCanonicalSnapshot &s)
    s.cycle = StringToInteger(f[1]);
    s.time = (datetime)StringToInteger(f[2]);
    s.symbol = f[3];
+   s.tf = QmeTfFromName(f[4]);
    s.price = StringToDouble(f[5]);
    s.atr = StringToDouble(f[6]);
    s.bias = (f[7] == "BUY") ? QME_SIDE_BUY : (f[7] == "SELL" ? QME_SIDE_SELL : QME_SIDE_NONE);

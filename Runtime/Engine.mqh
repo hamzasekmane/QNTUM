@@ -19,6 +19,8 @@
 #include "../Core/Utils.mqh"
 #include "../Core/Logger.mqh"
 #include "../Core/EventLedger.mqh"
+#include "../Core/EventBus.mqh"
+#include "../Core/EventDispatcher.mqh"
 #include "../Core/Funnel.mqh"
 #include "../Core/Profiler.mqh"
 #include "../Account/AccountContext.mqh"
@@ -29,6 +31,7 @@
 #include "../Analysis/Market/SessionEngine.mqh"
 #include "../Zones/ZoneEngine.mqh"
 #include "../Intelligence/ScoringEngine.mqh"
+#include "../Intelligence/CausalValidator.mqh"
 #include "../Intelligence/AdaptiveWeights.mqh"
 #include "../Strategy/SignalEngine.mqh"
 #include "../Strategy/SignalRegistry.mqh"
@@ -70,6 +73,8 @@ private:
    CScanner           m_scanner;
    CScheduler         m_scheduler;
    CEventLedger       m_ledger;
+   CEventBus          m_bus;
+   CEventDispatcher   m_dispatch;
    CMarketClock       m_clock;
 
    CSignalLifecycle   m_lifecycle;
@@ -175,6 +180,11 @@ bool CEngine::Init(const SInputs &input, string &err)
 
    m_clock.Refresh();
    m_ledger.Init(QME_MAX_EVENT_QUEUE, m_cfg.In.logCycleDetail);
+   m_bus.Reset();
+   if(!m_dispatch.AddSink(GetPointer(m_ledger), "ledger"))
+      QmeLogMsg(QME_LOG_WARN, "Engine", "event sink 'ledger' could not be registered");
+   else
+      m_dispatch.SubscribeAll("ledger");
 
    //--- account (authority for everything that follows)
    if(!m_account.Init(m_in, m_cfg.In.magic, err))
@@ -277,6 +287,9 @@ void CEngine::Deinit(const string reason)
    m_account.Shutdown();
    m_controller.Stopped();
 
+   m_bus.Publish(QME_EVT_SHUTDOWN, "", (long)m_cycles, 0.0, reason, QME_LOG_WARN);
+   m_dispatch.Dispatch(m_bus);
+
    if(m_profiler.Enabled() && m_profiler.Count() > 0)
       QmeLogMsg(QME_LOG_INFO, "Engine", "profile: " + m_profiler.Report());
    QmeLogMsg(QME_LOG_INFO, "Engine", "funnel: " + m_funnel.Summary());
@@ -352,18 +365,17 @@ void CEngine::RecordCanonical(const CSymbolRuntime &rt)
    snap.cycle      = m_cycles;
    snap.time       = TimeCurrent();
    snap.symbol     = rt.symbol;
-   snap.tf         = m_cfg.In.tfEntry;
+   snap.tf         = rt.analysis[4].tf;
    snap.price      = rt.analysis[4].price;
    snap.atr        = rt.analysis[4].atr;
-   snap.bias       = rt.analysis[4].bias.side;
-   snap.biasScore  = rt.analysis[4].bias.score;
+   snap.bias       = rt.analysis[1].bias.side;
+   snap.biasScore  = rt.analysis[1].bias.score;
    snap.zoneCount  = rt.zones.ActiveCount(TimeCurrent());
-   snap.session    = rt.analysis[4].session.session;
+   snap.session    = rt.analysis[1].session.session;
    snap.digest     = CCanonicalSnapshot::Digest(snap);
    m_memory.Inc("canonical_frames");
 
-   if(m_cfg.In.logLevel <= QME_LOG_DEBUG)
-      QmeLogMsg(QME_LOG_DEBUG, "Engine", "canonical " + CCanonicalSnapshot::Serialize(snap));
+   QmeLogDebug("Engine", "canonical " + CCanonicalSnapshot::Serialize(snap));
   }
 
 //------------------------------------------------------------------//
@@ -630,6 +642,9 @@ bool CEngine::Cycle(const bool force, string &note)
      {
       m_errors++;
       m_controller.Fault("account refresh failed");
+      m_bus.Publish(QME_EVT_ERROR, "", (long)m_cycles, 0.0, "account refresh failed",
+                    QME_LOG_ERROR);
+      m_dispatch.Dispatch(m_bus);
       note = "account refresh failed";
       m_inCycle = false;
       return(false);
@@ -642,11 +657,15 @@ bool CEngine::Cycle(const bool force, string &note)
       return(true);
      }
    m_scheduler.MarkScan(TimeCurrent());
+   m_bus.Publish(QME_EVT_SCAN_START, "", (long)m_cycles, 0.0, "scan");
 
    string scanNote = "";
    if(!m_scanner.Scan(force, scanNote))
      {
       m_errors++;
+      m_bus.Publish(QME_EVT_ERROR, "", (long)m_cycles, 0.0, "scan: " + scanNote,
+                    QME_LOG_ERROR);
+      m_dispatch.Dispatch(m_bus);
       note = "scan: " + scanNote;
       m_inCycle = false;
       return(false);
@@ -672,6 +691,17 @@ bool CEngine::Cycle(const bool force, string &note)
 
       m_funnel.Pass(m_funnel.Stage("symbol"));
       RecordCanonical(*rt);
+
+      //--- no decision may rest on evidence from the future or from stale
+      //--- mixed timeframes; this veto runs before any signal is generated
+      string causalWhy = "";
+      if(!CCausalValidator::EvidenceIsCausal(rt.analysis[4], TimeCurrent(), rt.analysis[4].tf, causalWhy) ||
+         !CCausalValidator::TimeframesAreCoherent(rt.analysis[4], rt.analysis[3], causalWhy))
+        {
+         m_funnel.Drop(m_funnel.Stage("causal"), causalWhy);
+         QmeLogMsg(QME_LOG_WARN, "Engine", rt.symbol + ": analysis rejected (" + causalWhy + ")");
+         continue;
+        }
 
       STradingSignal sigs[];
       const int n = m_signals.Generate(rt.analysis[1], rt.analysis[2], rt.analysis[3],
@@ -730,6 +760,10 @@ bool CEngine::Cycle(const bool force, string &note)
         }
      }
 
+   m_bus.Publish(QME_EVT_SCAN_END, "", (long)m_cycles, (double)signalsThisCycle,
+                 IntegerToString(approvedThisCycle) + " executed");
+   m_dispatch.Dispatch(m_bus);
+
    MaintainSignals();
    SaveCheckpoint(TimeCurrent());
 
@@ -766,6 +800,9 @@ void CEngine::OnTimer(void)
    if(m_scheduler.CheckpointDue(now)) SaveCheckpoint(now);
 
    //--- positions that disappeared at the broker are closed in our books
+   m_bus.Publish(QME_EVT_TIMER, "", 0, 0.0, "timer");
+   m_dispatch.Dispatch(m_bus);
+
    m_positions.ReconcileWithBroker(m_cfg.In.magic);
    ManagePositions();
    MaintainSignals();

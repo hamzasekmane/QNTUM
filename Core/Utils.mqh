@@ -253,6 +253,22 @@ string QmeTfName(const ENUM_TIMEFRAMES tf)
    return("TF?");
   }
 
+//--- inverse of QmeTfName; PERIOD_CURRENT when the name is unknown
+ENUM_TIMEFRAMES QmeTfFromName(const string name)
+  {
+   if(name == "M1")  return(PERIOD_M1);
+   if(name == "M5")  return(PERIOD_M5);
+   if(name == "M15") return(PERIOD_M15);
+   if(name == "M30") return(PERIOD_M30);
+   if(name == "H1")  return(PERIOD_H1);
+   if(name == "H4")  return(PERIOD_H4);
+   if(name == "D1")  return(PERIOD_D1);
+   if(name == "W1")  return(PERIOD_W1);
+   if(name == "MN1") return(PERIOD_MN1);
+   if(name == "CUR") return(PERIOD_CURRENT);
+   return(PERIOD_CURRENT);
+  }
+
 string QmeSessionName(const ENUM_QME_SESSION s)
   {
    switch(s)

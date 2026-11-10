@@ -30,6 +30,7 @@ Each test is an EA in `Tests/` that runs its assertions in `OnInit` and returns
 | `Test_SignalLifecycle.mq5` | legal chain, six illegal transitions refused, terminal classification, refusal counter |
 | `Test_Structure.mq5` | MSS flag handling, cleared event invalid, live evaluation compared to its own flag (skips without history) |
 | `Test_Liquidity.mq5` | nearest above/below, absence returns false instead of a fake price |
+| `Test_Canonical.mq5` | timeframe name round trip, digest determinism and length, bookkeeping fields excluded, state changes alter the digest, serialise/deserialise round trip, malformed lines refused, equivalence with and without price tolerance |
 
 ### Integration
 
@@ -77,7 +78,7 @@ the symbol). A run with skips is inconclusive for those items.
 
 ```bash
 cd QNTUM
-python3 Tools/mql5check.py          # structural check, 182 files
+python3 Tools/mql5check.py          # structural check, 184 files
 python3 Tools/mql5fields.py         # member/field access heuristic
 ```
 
@@ -91,7 +92,7 @@ Neither tool is a compiler.
 Current result:
 
 ```
-scanned 182 files (182 implemented, 0 empty)
+scanned 184 files (184 implemented, 0 empty)
 OK: no structural errors detected (this is NOT a compilation proof)
 ```
 
