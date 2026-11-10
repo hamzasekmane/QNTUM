@@ -66,10 +66,29 @@ Dependency direction is strictly downward. Consequences:
 | 7 | Decision + risk | `CDecisionEngine` → `CRiskEngine` → `CPreTradeValidator` | rejection reason recorded |
 | 8 | Execution | `CExecutionGateway` | state recorded, signal → EXECUTION_FAILED |
 | 9 | Book-keeping | history, replay, execution statistics | — |
-| 10 | Checkpoint | `CCheckpointManager` | logged, never fatal |
+| 10 | Signal maintenance | `CSignalExpiry`, `CEngine::MaintainSignals` | terminal records pruned to history |
+| 11 | Checkpoint | `CCheckpointManager` | logged, never fatal |
+
+`MaintainSignals` also promotes an `EXECUTED` signal to `MONITORING` once its
+position exists at the broker, so the registry mirrors reality rather than
+intent. `ManagePositions` (timer tick, and only when `breakEvenAtR > 0`) tightens
+protection; see `ExecutionSpecification.md` §7.1.
 
 A cycle can therefore *not* trade without steps 5–8 all succeeding, and each of
 those steps can only ever refuse.
+
+## 3.1 Instrumentation
+
+Three observers run alongside the cycle and never influence a decision:
+
+* `CFunnel` — per-stage counters plus a per-reason rejection tally. It is why
+  every refusal can be answered with "how many, and why".
+* `CProfiler` — opt-in (`profileCycles`), section timings for the cycle; the
+  report goes to the log at shutdown and into `Status()` while enabled.
+* `CCanonicalSnapshot` — a per-symbol digest of the analysed state (price, ATR,
+  bias, session, zone count). Identical inputs must produce an identical
+  digest, which is what makes two runs comparable without replaying ticks.
+  Written at debug level.
 
 ## 4. Component inventory
 

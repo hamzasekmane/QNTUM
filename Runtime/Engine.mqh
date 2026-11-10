@@ -19,6 +19,8 @@
 #include "../Core/Utils.mqh"
 #include "../Core/Logger.mqh"
 #include "../Core/EventLedger.mqh"
+#include "../Core/Funnel.mqh"
+#include "../Core/Profiler.mqh"
 #include "../Account/AccountContext.mqh"
 #include "../Account/SymbolSpecifications.mqh"
 #include "../Data/MarketData.mqh"
@@ -86,6 +88,8 @@ private:
    CPositionStateStore m_positions;
    CSignalHistoryStore m_history;
    CRuntimeMemory     m_memory;
+   CProfiler          m_profiler;
+   CFunnel            m_funnel;
    CRuntimeController m_controller;
    CCheckpointManager m_checkpoint;
    CReplayEngine      m_replay;
@@ -104,6 +108,7 @@ private:
    SSignalRecord      MakeHistoryRecord(const STradingSignal &s, const ENUM_QME_REJECT reason);
    bool               HandleExecution(const SDecision &d, CSymbolRuntime &rt);
    void               SaveCheckpoint(const datetime now);
+   void               RecordCanonical(const CSymbolRuntime &rt);
    void               MaintainSignals(void);
    void               ManagePositions(void);
    void               CloseOppositePositions(const STradePlan &plan);
@@ -225,6 +230,8 @@ bool CEngine::Init(const SInputs &input, string &err)
    if(!m_checkpoint.Init(m_cfg.In.persistState, "qme_state.txt", m_cfg.In.checkpointSec, err))
       QmeLogMsg(QME_LOG_WARN, "Engine", "persistence disabled: " + err);
    m_replay.Init(512);
+   m_funnel.Reset();
+   m_profiler.Init(m_cfg.In.profileCycles);
    RestoreState();
 
    //--- runtime mode
@@ -270,6 +277,9 @@ void CEngine::Deinit(const string reason)
    m_account.Shutdown();
    m_controller.Stopped();
 
+   if(m_profiler.Enabled() && m_profiler.Count() > 0)
+      QmeLogMsg(QME_LOG_INFO, "Engine", "profile: " + m_profiler.Report());
+   QmeLogMsg(QME_LOG_INFO, "Engine", "funnel: " + m_funnel.Summary());
    QmeLogMsg(QME_LOG_INFO, "Engine", m_shutdown.Report());
    m_ready = false;
   }
@@ -327,6 +337,33 @@ bool CEngine::ApplySignalState(const ulong id, const ENUM_QME_SIGNAL_STATE to,
    if(!m_registry.Get(id, sig)) return(false);
    if(!m_lifecycle.Transition(sig, to, reason, note, TimeCurrent())) return(false);
    return(m_registry.Update(sig));
+  }
+
+//------------------------------------------------------------------//
+//| Deterministic per-symbol fingerprint of the analysed state.           |
+//|                                                                   |
+//| Same inputs, same digest: this is what makes two runs comparable      |
+//| without replaying the ticks. Written at debug level only.             |
+//+------------------------------------------------------------------//
+void CEngine::RecordCanonical(const CSymbolRuntime &rt)
+  {
+   SCanonicalSnapshot snap;
+   QmeCanonicalClear(snap);
+   snap.cycle      = m_cycles;
+   snap.time       = TimeCurrent();
+   snap.symbol     = rt.symbol;
+   snap.tf         = m_cfg.In.tfEntry;
+   snap.price      = rt.analysis[4].price;
+   snap.atr        = rt.analysis[4].atr;
+   snap.bias       = rt.analysis[4].bias.side;
+   snap.biasScore  = rt.analysis[4].bias.score;
+   snap.zoneCount  = rt.zones.ActiveCount(TimeCurrent());
+   snap.session    = rt.analysis[4].session.session;
+   snap.digest     = CCanonicalSnapshot::Digest(snap);
+   m_memory.Inc("canonical_frames");
+
+   if(m_cfg.In.logLevel <= QME_LOG_DEBUG)
+      QmeLogMsg(QME_LOG_DEBUG, "Engine", "canonical " + CCanonicalSnapshot::Serialize(snap));
   }
 
 //------------------------------------------------------------------//
@@ -583,6 +620,10 @@ bool CEngine::Cycle(const bool force, string &note)
      }
    m_inCycle = true;
 
+   const int pCycle = m_profiler.Section("cycle");
+   m_profiler.Begin(pCycle);
+   m_funnel.CycleBegin();
+
    m_cycles++;
    m_clock.Refresh();
    if(!m_account.Refresh())
@@ -611,6 +652,8 @@ bool CEngine::Cycle(const bool force, string &note)
       return(false);
      }
 
+   m_funnel.Pass(m_funnel.Stage("scan"));
+
    const SSessionResult session = m_scanner.Session();
    const SAccountContext acc = m_account.Snapshot();
 
@@ -626,6 +669,9 @@ bool CEngine::Cycle(const bool force, string &note)
       if(rt == NULL) continue;
       if(!rt.snapshot.dataValid) continue;
       if(m_scheduler.IsCooling(rt.symbol, TimeCurrent())) continue;
+
+      m_funnel.Pass(m_funnel.Stage("symbol"));
+      RecordCanonical(*rt);
 
       STradingSignal sigs[];
       const int n = m_signals.Generate(rt.analysis[1], rt.analysis[2], rt.analysis[3],
@@ -655,6 +701,7 @@ bool CEngine::Cycle(const bool force, string &note)
             dec.note = tradeWhy;
             RecordDecision(dec, m_cycles);
             m_history.Add(MakeHistoryRecord(sigs[k], QME_REJ_DISABLED_BY_CONFIG));
+            m_funnel.Drop(m_funnel.Stage("trading"), QmeRejectName(QME_REJ_DISABLED_BY_CONFIG));
             continue;
            }
 
@@ -663,17 +710,23 @@ bool CEngine::Cycle(const bool force, string &note)
            {
             RecordDecision(dec, m_cycles);
             m_history.Add(MakeHistoryRecord(sigs[k], dec.reason));
+            m_funnel.Drop(m_funnel.Stage("decision"), QmeRejectName(dec.reason));
             continue;
            }
 
          RecordDecision(dec, m_cycles);
+         m_funnel.Pass(m_funnel.Stage("decision"));
          if(HandleExecution(dec, *rt))
            {
             approvedThisCycle++;
             m_history.Add(MakeHistoryRecord(sigs[k], QME_REJ_NONE));
+            m_funnel.Pass(m_funnel.Stage("executed"));
            }
          else
+           {
             m_history.Add(MakeHistoryRecord(sigs[k], QME_REJ_EXECUTION_FAILED));
+            m_funnel.Drop(m_funnel.Stage("executed"), "execution failed");
+           }
         }
      }
 
@@ -688,6 +741,7 @@ bool CEngine::Cycle(const bool force, string &note)
 
    note = "cycle " + IntegerToString((int)m_cycles) + ": " + IntegerToString(signalsThisCycle) +
           " signal(s), " + IntegerToString(approvedThisCycle) + " executed";
+   m_profiler.End(pCycle);
    m_inCycle = false;
    return(true);
   }
@@ -747,7 +801,8 @@ string CEngine::Status(void)
           " | equity=" + QmeFmtMoney(acc.equity) +
           " | " + m_risk.Describe() +
           " | " + m_gateway.Describe() +
-          " | " + m_checkpoint.Describe());
+          " | " + m_checkpoint.Describe() +
+          (m_profiler.Enabled() ? " | " + m_profiler.Report() : ""));
   }
 
 #endif // __QME_RUNTIME_ENGINE_MQH__

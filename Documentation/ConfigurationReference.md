@@ -101,6 +101,7 @@ An account whose type cannot be determined is never authorized.
 | `closeOnOppositeSignal` | `false` | after a *successful* new entry, close the tracked position on the same symbol that points the other way; off unless enabled |
 | `breakEvenAtR` | `0.0` | when > 0, move the stop to the entry price once the trade has earned that many multiples of its initial risk (R). `0` disables it |
 | `tradeJournalEnabled` | `true` | CSV evidence |
+| `profileCycles` | `false` | measure per-stage cycle timings, reported at shutdown and in the heartbeat |
 
 ## 9. Persistence
 

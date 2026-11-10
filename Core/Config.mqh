@@ -90,6 +90,7 @@ struct SInputs
    bool              closeOnOppositeSignal;
    double            breakEvenAtR;         // 0 = disabled; otherwise move SL to entry at N x R
    bool              tradeJournalEnabled;
+   bool              profileCycles;
 
    //--- persistence
    bool              persistState;
@@ -160,6 +161,7 @@ void QmeInputsDefaults(SInputs &in)
    in.closeOnOppositeSignal = false;
    in.breakEvenAtR          = 0.0;
    in.tradeJournalEnabled   = true;
+   in.profileCycles         = false;
 
    in.persistState          = true;
    in.checkpointSec         = 30;

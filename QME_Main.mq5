@@ -87,6 +87,7 @@ input int               retryDelayMs        = 500;            // Retry base dela
 input int               deviationPoints     = 20;             // Max price deviation (points)
 input bool              closeOnOppositeSignal = false;        // Close opposite position on new signal
 input double            breakEvenAtR        = 0.0;            // Move stop to break-even at N x R (0 = off)
+input bool              profileCycles       = false;          // Measure cycle timings
 input bool              tradeJournalEnabled = true;           // Write trade journal CSV
 
 input group "=== 9. Persistence ==="
@@ -175,6 +176,7 @@ void BuildInputs(SInputs &in)
    in.deviationPoints       = deviationPoints;
    in.closeOnOppositeSignal = closeOnOppositeSignal;
    in.breakEvenAtR          = breakEvenAtR;
+   in.profileCycles         = profileCycles;
    in.tradeJournalEnabled   = tradeJournalEnabled;
 
    in.persistState          = persistState;
