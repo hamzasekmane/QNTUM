@@ -78,7 +78,15 @@ the symbol). A run with skips is inconclusive for those items.
 ```bash
 cd QNTUM
 python3 Tools/mql5check.py          # structural check, 182 files
+python3 Tools/mql5fields.py         # member/field access heuristic
 ```
+
+`mql5check.py` checks include guards, balance, duplicate types, unknown
+identifiers and misplaced `input` declarations. `mql5fields.py` resolves every
+`variable.member` access against the declared type (including base classes and
+array members) and reports accesses the type does not have — the class of typo a
+compiler would catch, catching what it can before MetaEditor is available.
+Neither tool is a compiler.
 
 Current result:
 

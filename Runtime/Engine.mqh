@@ -32,6 +32,7 @@
 #include "../Strategy/SignalRegistry.mqh"
 #include "../Strategy/SignalLifecycle.mqh"
 #include "../Strategy/SignalDeduplicator.mqh"
+#include "../Strategy/SignalExpiry.mqh"
 #include "../Strategy/StrategyRegistry.mqh"
 #include "../Strategy/DecisionEngine.mqh"
 #include "../Risk/RiskEngine.mqh"
@@ -102,6 +103,8 @@ private:
    SSignalRecord      MakeHistoryRecord(const STradingSignal &s, const ENUM_QME_REJECT reason);
    bool               HandleExecution(const SDecision &d, CSymbolRuntime &rt);
    void               SaveCheckpoint(const datetime now);
+   void               MaintainSignals(void);
+   void               AttachTickets(const ulong id, const SExecutionResult &res);
    void               RestoreState(void);
    void               TrackingAfterExecution(const STradePlan &plan, const SExecutionResult &res);
 
@@ -324,6 +327,57 @@ bool CEngine::ApplySignalState(const ulong id, const ENUM_QME_SIGNAL_STATE to,
   }
 
 //------------------------------------------------------------------//
+//| Store the broker identity on the signal before its state advances.   |
+//+------------------------------------------------------------------//
+void CEngine::AttachTickets(const ulong id, const SExecutionResult &res)
+  {
+   STradingSignal sig;
+   if(!m_registry.Get(id, sig)) return;
+   sig.positionTicket = res.positionTicket;
+   sig.orderTicket = res.orderTicket;
+   sig.dealTicket = res.dealTicket;
+   sig.execState = res.state;
+   sig.attempts = res.attempts;
+   m_registry.Update(sig);
+  }
+
+//------------------------------------------------------------------//
+//| Expiry + monitoring bookkeeping. Runs every cycle and every timer.   |
+//+------------------------------------------------------------------//
+void CEngine::MaintainSignals(void)
+  {
+   const datetime now = TimeCurrent();
+   int expired = 0;
+
+   //--- expiry is per symbol because it needs that symbol's zones and price
+   for(int i = 0; i < m_scanner.Count(); i++)
+     {
+      CSymbolRuntime *rt = m_scanner.At(i);
+      if(rt == NULL) continue;
+      const double price = rt.snapshot.bid > 0.0 ? rt.snapshot.bid : rt.analysis[4].price;
+      expired += CSignalExpiry::Process(m_registry, m_lifecycle, rt.zones, now, price);
+     }
+   if(expired > 0) m_memory.Inc("signals_expired", expired);
+
+   //--- an executed signal whose position exists is under management
+   const int total = m_registry.Count();
+   for(int i = 0; i < total; i++)
+     {
+      STradingSignal sig;
+      if(!m_registry.At(i, sig)) continue;
+      if(sig.state != QME_SIG_EXECUTED) continue;
+      if(sig.positionTicket == 0) continue;
+      if(!PositionSelectByTicket(sig.positionTicket)) continue;
+      ApplySignalState(sig.id, QME_SIG_MONITORING, QME_REJ_NONE,
+                       "position " + IntegerToString((long)sig.positionTicket) + " under management");
+     }
+
+   //--- keep the registry small: terminal records older than a day are history
+   const int pruned = m_registry.RemoveTerminalOlderThan(now - 86400);
+   if(pruned > 0) m_memory.Inc("signals_pruned", pruned);
+  }
+
+//------------------------------------------------------------------//
 SSignalRecord CEngine::MakeHistoryRecord(const STradingSignal &s, const ENUM_QME_REJECT reason)
   {
    SSignalRecord r;
@@ -395,6 +449,7 @@ bool CEngine::HandleExecution(const SDecision &d, CSymbolRuntime &rt)
    m_trades++;
    m_execStats.RecordFill(d.plan.symbol, res.filledVolume > 0.0 ? res.filledVolume : d.plan.volume);
    TrackingAfterExecution(d.plan, res);
+   AttachTickets(d.signalId, res);
    ApplySignalState(d.signalId, QME_SIG_EXECUTION_PENDING, QME_REJ_NONE, "sent to broker");
    ApplySignalState(d.signalId, QME_SIG_EXECUTED, QME_REJ_NONE,
                     "ticket " + IntegerToString((long)res.positionTicket));
@@ -514,7 +569,7 @@ bool CEngine::Cycle(const bool force, string &note)
         }
      }
 
-   //--- canonical snapshot for this cycle (per symbol is recorded by the dashboard)
+   MaintainSignals();
    SaveCheckpoint(TimeCurrent());
 
    if(m_scheduler.HeartbeatDue(TimeCurrent()))
@@ -550,6 +605,7 @@ void CEngine::OnTimer(void)
 
    //--- positions that disappeared at the broker are closed in our books
    m_positions.ReconcileWithBroker(m_cfg.In.magic);
+   MaintainSignals();
   }
 
 //------------------------------------------------------------------//

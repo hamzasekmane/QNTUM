@@ -186,6 +186,9 @@ non-empty, 25k+ lines**, plus 9 reports in `Documentation/`.
 $ python3 Tools/mql5check.py
 scanned 182 files (182 implemented, 0 empty)
 OK: no structural errors detected (this is NOT a compilation proof)
+
+$ python3 Tools/mql5fields.py
+-- 0 suspicious member access(es); this is a heuristic, not a compiler
 ```
 
 The checker validates include guards, brace/parenthesis balance, duplicate type
