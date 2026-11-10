@@ -120,6 +120,12 @@ class Source:
 
 
 def parse(src):
+    #--- includes must be read from the RAW text: strip_comments blanks string
+    #--- literals, so '#include "..."' would never match on stripped lines
+    for raw_line in src.raw.split('\n'):
+        m = INCLUDE_RE.match(raw_line)
+        if m:
+            src.includes.append(m.group(1))
     depth = 0
     cur_class = None
     class_depth = None

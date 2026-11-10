@@ -63,7 +63,6 @@
 #include "Zones/ZoneIdentity.mqh"
 #include "Zones/ZoneValidator.mqh"
 #include "Zones/ZoneLifecycle.mqh"
-#include "Zones/ZoneMerger.mqh"
 #include "Zones/ZoneRanking.mqh"
 #include "Zones/ZoneBuilder.mqh"
 #include "Zones/ZoneBoard.mqh"

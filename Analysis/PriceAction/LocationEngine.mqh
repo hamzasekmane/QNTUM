@@ -15,7 +15,7 @@
 #include "../../Core/Utils.mqh"
 #include "../../Data/BarSeries.mqh"
 #include "PremiumDiscountEngine.mqh"
-#include "LiquidityMap.mqh"
+#include "../Liquidity/LiquidityMap.mqh"
 
 struct SLocationResult
   {
