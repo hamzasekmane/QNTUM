@@ -98,7 +98,8 @@ An account whose type cannot be determined is never authorized.
 | `maxRetries` | `2` | transient retries only |
 | `retryDelayMs` | `500` | base delay |
 | `deviationPoints` | `20` | max slippage |
-| `closeOnOppositeSignal` | `false` | not implemented as an auto-close; reserved |
+| `closeOnOppositeSignal` | `false` | after a *successful* new entry, close the tracked position on the same symbol that points the other way; off unless enabled |
+| `breakEvenAtR` | `0.0` | when > 0, move the stop to the entry price once the trade has earned that many multiples of its initial risk (R). `0` disables it |
 | `tradeJournalEnabled` | `true` | CSV evidence |
 
 ## 9. Persistence

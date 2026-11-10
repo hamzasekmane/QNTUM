@@ -216,4 +216,4 @@ progression from analysis mode to DEMO to REAL.
 | `CReplayEngine` replays *decisions*, not market data | market frames are not stored; the audit checks decision invariants, and the documentation says so explicitly |
 | `CCorrelationRisk` is a heuristic table, not a covariance model | honest labelling beats a fake statistics module |
 | `CNewsFilter` uses configured GMT windows only | no economic calendar is bundled or fabricated |
-| `closeOnOppositeSignal` is accepted but not acted on | implementing it would add an automatic close path; it is marked reserved in the configuration reference rather than silently ignored |
+| `closeOnOppositeSignal` and `breakEvenAtR` are off by default | both are implemented (ExecutionSpecification §7.1–7.2) but disabled until an operator opts in; no default behaviour closes a position or moves a stop |

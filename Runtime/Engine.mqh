@@ -38,6 +38,7 @@
 #include "../Risk/RiskEngine.mqh"
 #include "../Execution/ExecutionGateway.mqh"
 #include "../Execution/TransactionHandler.mqh"
+#include "../Execution/TradeManager.mqh"
 #include "../Execution/PositionReconciler.mqh"
 #include "../Persistence/PositionStateStore.mqh"
 #include "../Persistence/SignalHistoryStore.mqh"
@@ -104,6 +105,8 @@ private:
    bool               HandleExecution(const SDecision &d, CSymbolRuntime &rt);
    void               SaveCheckpoint(const datetime now);
    void               MaintainSignals(void);
+   void               ManagePositions(void);
+   void               CloseOppositePositions(const STradePlan &plan);
    void               AttachTickets(const ulong id, const SExecutionResult &res);
    void               RestoreState(void);
    void               TrackingAfterExecution(const STradePlan &plan, const SExecutionResult &res);
@@ -378,6 +381,110 @@ void CEngine::MaintainSignals(void)
   }
 
 //------------------------------------------------------------------//
+//| Position maintenance. Only ever TIGHTENS protection.                  |
+//|                                                                   |
+//| Break-even is disabled by default (breakEvenAtR == 0). When enabled,  |
+//| the stop is moved to the entry price once the trade has earned N x R.  |
+//| A position without any stop is never given a guessed level: it is      |
+//| reported as a critical issue instead.                               |
+//+------------------------------------------------------------------//
+void CEngine::ManagePositions(void)
+  {
+   if(m_cfg.In.breakEvenAtR <= 0.0) return;
+
+   for(int i = 0; i < m_positions.Count(); i++)
+     {
+      STrackedPosition p;
+      if(!m_positions.At(i, p)) continue;
+      if(p.closed) continue;
+      if(!PositionSelectByTicket(p.ticket)) continue;
+
+      const bool isBuy = ((ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY);
+      const double curSL = PositionGetDouble(POSITION_SL);
+      const double curTP = PositionGetDouble(POSITION_TP);
+      const double entry = PositionGetDouble(POSITION_PRICE_OPEN);
+
+      //--- keep the stored record in sync with the broker
+      if(curSL > 0.0 && (MathAbs(curSL - p.sl) > QME_PRICE_EPS ||
+                         MathAbs(curTP - p.tp) > QME_PRICE_EPS))
+         m_positions.UpdateStops(p.ticket, curSL, curTP);
+
+      if(curSL <= 0.0)
+        {
+         //--- never invent a level: this is an operator problem
+         QmeLogMsg(QME_LOG_ERROR, "Engine", "position " +
+                   IntegerToString((long)p.ticket) + " has no stop loss; break-even not applied");
+         continue;
+        }
+
+      const double stopDistance = MathAbs(entry - curSL);
+      if(stopDistance <= 0.0) continue;
+
+      //--- already at or beyond break-even?
+      if(isBuy && curSL >= entry - QME_PRICE_EPS) continue;
+      if(!isBuy && curSL <= entry + QME_PRICE_EPS) continue;
+
+      MqlTick tick;
+      if(!SymbolInfoTick(p.symbol, tick)) continue;
+      const double current = isBuy ? tick.bid : tick.ask;
+      if(current <= 0.0) continue;
+
+      const double profit = isBuy ? (current - entry) : (entry - current);
+      if(profit < m_cfg.In.breakEvenAtR * stopDistance) continue;
+
+      CSymbolRuntime *rt = m_scanner.Find(p.symbol);
+      if(rt == NULL) continue;
+
+      string why = "";
+      if(CTradeManager::TightenStop(p.ticket, entry, rt.spec, why))
+        {
+         m_positions.UpdateStops(p.ticket, entry, curTP);
+         m_memory.Inc("break_even_moves");
+         QmeLogMsg(QME_LOG_INFO, "Engine", "break-even: position " +
+                   IntegerToString((long)p.ticket) + " stop moved to " +
+                   DoubleToString(entry, rt.spec.digits));
+        }
+      else if(StringLen(why) > 0)
+         QmeLogMsg(QME_LOG_DEBUG, "Engine", "break-even skipped: " + why);
+     }
+  }
+
+//------------------------------------------------------------------//
+//| Optional: close an opposite position once the new one is filled.      |
+//| Off by default. Runs AFTER a successful entry, never before, so a      |
+//| failed entry can never leave the account flat by mistake.              |
+//+------------------------------------------------------------------//
+void CEngine::CloseOppositePositions(const STradePlan &plan)
+  {
+   if(!m_cfg.In.closeOnOppositeSignal) return;
+
+   for(int i = 0; i < m_positions.Count(); i++)
+     {
+      STrackedPosition p;
+      if(!m_positions.At(i, p)) continue;
+      if(p.closed) continue;
+      if(p.symbol != plan.symbol) continue;
+      if(p.side == plan.side) continue;
+      if(!PositionSelectByTicket(p.ticket)) continue;
+
+      CSymbolRuntime *rt = m_scanner.Find(p.symbol);
+      if(rt == NULL) continue;
+
+      string why = "";
+      if(CTradeManager::ClosePosition(p.ticket, 0.0, rt.spec, m_cfg.In.deviationPoints, why))
+        {
+         m_positions.Close(p.ticket);
+         QmeLogMsg(QME_LOG_INFO, "Engine", "closed opposite position " +
+                   IntegerToString((long)p.ticket) + " after a new " +
+                   QmeSideName(plan.side) + " entry on " + plan.symbol);
+        }
+      else
+         QmeLogMsg(QME_LOG_WARN, "Engine", "could not close opposite position " +
+                   IntegerToString((long)p.ticket) + ": " + why);
+     }
+  }
+
+//------------------------------------------------------------------//
 SSignalRecord CEngine::MakeHistoryRecord(const STradingSignal &s, const ENUM_QME_REJECT reason)
   {
    SSignalRecord r;
@@ -453,6 +560,7 @@ bool CEngine::HandleExecution(const SDecision &d, CSymbolRuntime &rt)
    ApplySignalState(d.signalId, QME_SIG_EXECUTION_PENDING, QME_REJ_NONE, "sent to broker");
    ApplySignalState(d.signalId, QME_SIG_EXECUTED, QME_REJ_NONE,
                     "ticket " + IntegerToString((long)res.positionTicket));
+   CloseOppositePositions(d.plan);
    m_scheduler.Cooldown(d.plan.symbol, TimeCurrent(), m_cfg.In.cooldownSecPerSymbol);
    return(true);
   }
@@ -605,6 +713,7 @@ void CEngine::OnTimer(void)
 
    //--- positions that disappeared at the broker are closed in our books
    m_positions.ReconcileWithBroker(m_cfg.In.magic);
+   ManagePositions();
    MaintainSignals();
   }
 

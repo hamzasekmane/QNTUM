@@ -75,6 +75,32 @@ which blocks a re-send pending operator attention.
 `TightenStop` is a thin wrapper that does nothing unless the candidate actually
 tightens.
 
+### 7.1 Break-even (`breakEvenAtR`)
+
+Off by default. When `breakEvenAtR = N > 0`, `CEngine::ManagePositions` runs on
+every timer tick and looks at each tracked, still-open position:
+
+1. read the live `POSITION_SL`, `POSITION_TP` and `POSITION_PRICE_OPEN`;
+2. keep the stored record in sync with the broker;
+3. if the position has **no** stop, log an error and do nothing — a level is
+   never invented;
+4. compute the initial risk `|entry - SL|` and the open profit in the trade's
+   direction; when the profit reaches `N x risk`, call
+   `CTradeManager::TightenStop(ticket, entry, ...)`.
+
+The stop therefore only ever moves toward the entry and never past the current
+market. A position already at or beyond break-even is skipped, so the call is
+idempotent.
+
+### 7.2 Opposite-signal close (`closeOnOppositeSignal`)
+
+Off by default. When enabled, `CEngine::CloseOppositePositions` runs **after** a
+new entry has been confirmed, iterating the tracked positions on that symbol
+whose side differs from the new plan. Before that it is only attempted once per
+successful entry, and a failed close is logged as a warning rather than retried
+or escalated. Executing the new order first is deliberate: a failed entry can
+never leave the account flat with no replacement position.
+
 ## 8. Evidence
 
 * `CTradeJournal` — append-only CSV in the common folder:

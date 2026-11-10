@@ -88,6 +88,7 @@ struct SInputs
    int               retryDelayMs;
    int               deviationPoints;
    bool              closeOnOppositeSignal;
+   double            breakEvenAtR;         // 0 = disabled; otherwise move SL to entry at N x R
    bool              tradeJournalEnabled;
 
    //--- persistence
@@ -157,6 +158,7 @@ void QmeInputsDefaults(SInputs &in)
    in.retryDelayMs          = 500;
    in.deviationPoints       = 20;
    in.closeOnOppositeSignal = false;
+   in.breakEvenAtR          = 0.0;
    in.tradeJournalEnabled   = true;
 
    in.persistState          = true;
@@ -254,6 +256,8 @@ bool CConfig::Init(const SInputs &src, string &err)
       return(Fail(err, "maxConsecutiveLosses must be in [0,50]"));
    if(In.minRR < 0.5 || In.minRR > 20.0)
       return(Fail(err, "minRR must be in [0.5,20]"));
+   if(In.breakEvenAtR < 0.0 || In.breakEvenAtR > 10.0)
+      return(Fail(err, "breakEvenAtR must be in [0,10] (0 disables)"));
 
    //--- strategy
    if(In.minScore < 0.0 || In.minScore > QME_SCORE_MAX)
