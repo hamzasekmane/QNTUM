@@ -46,16 +46,20 @@ bool CSignalLifecycle::Allowed(const ENUM_QME_SIGNAL_STATE from, const ENUM_QME_
      {
       case QME_SIG_DETECTED:
          return(to == QME_SIG_EVALUATING || to == QME_SIG_REJECTED ||
-                to == QME_SIG_EXPIRED || to == QME_SIG_CANCELLED);
+                to == QME_SIG_EXPIRED || to == QME_SIG_CANCELLED ||
+                to == QME_SIG_INVALIDATED);
       case QME_SIG_EVALUATING:
          return(to == QME_SIG_APPROVED || to == QME_SIG_REJECTED ||
-                to == QME_SIG_EXPIRED || to == QME_SIG_CANCELLED);
+                to == QME_SIG_EXPIRED || to == QME_SIG_CANCELLED ||
+                to == QME_SIG_INVALIDATED);
       case QME_SIG_APPROVED:
          return(to == QME_SIG_EXECUTION_PENDING || to == QME_SIG_EXPIRED ||
-                to == QME_SIG_CANCELLED || to == QME_SIG_REJECTED);
+                to == QME_SIG_CANCELLED || to == QME_SIG_REJECTED ||
+                to == QME_SIG_INVALIDATED);
       case QME_SIG_EXECUTION_PENDING:
          return(to == QME_SIG_EXECUTED || to == QME_SIG_EXECUTION_FAILED ||
-                to == QME_SIG_CANCELLED || to == QME_SIG_EXPIRED);
+                to == QME_SIG_CANCELLED || to == QME_SIG_EXPIRED ||
+                to == QME_SIG_INVALIDATED);
       case QME_SIG_EXECUTED:
          return(to == QME_SIG_MONITORING || to == QME_SIG_CLOSED ||
                 to == QME_SIG_INVALIDATED);

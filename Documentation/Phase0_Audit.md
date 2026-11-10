@@ -163,7 +163,7 @@ Interfaces defined before bodies; each file compilable at the end of the phase.
 
 ## 8. Delivery status against this plan (as implemented)
 
-The plan above was executed in order. Final tree: **184 MQL5 source files, all
+The plan above was executed in order. Final tree: **188 MQL5 source files, all
 non-empty, 25k+ lines**, plus 10 reports in `Documentation/`.
 
 | Phase | Scope | Status |
@@ -178,13 +178,13 @@ non-empty, 25k+ lines**, plus 10 reports in `Documentation/`.
 | 7 | `Execution/` (11) | done |
 | 8 | `Persistence/` (7) | done |
 | 9 | `Runtime/` (8), `Monitoring/` (6), `Output/` (7) | done |
-| 10 | `QME.mqh`, `QME_Main.mq5`, `Tests/` (18 programs), documentation | done |
+| 10 | `QME.mqh`, `QME_Main.mq5`, `Tests/` (20 programs), documentation | done |
 
 ### Verification actually performed
 
 ```
 $ python3 Tools/mql5check.py
-scanned 184 files (184 implemented, 0 empty)
+scanned 188 files (188 implemented, 0 empty)
 OK: no structural errors detected (this is NOT a compilation proof)
 
 $ python3 Tools/mql5fields.py
@@ -202,7 +202,7 @@ static heuristics — neither is a compiler.
 
 * **Compilation** — no MetaEditor, no MT5 terminal, no Wine in the build
   environment. No compilation result is claimed anywhere in this repository.
-* **Test execution** — the 18 test programs have never been run here. They are
+* **Test execution** — the 20 test programs have never been run here. They are
   written to fail loudly (`INIT_FAILED`) and to `SKIP` (never pass) when the
   environment lacks market data.
 * **Backtests / forward tests** — none exist and none are reported.

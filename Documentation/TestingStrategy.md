@@ -31,6 +31,8 @@ Each test is an EA in `Tests/` that runs its assertions in `OnInit` and returns
 | `Test_Structure.mq5` | MSS flag handling, cleared event invalid, live evaluation compared to its own flag (skips without history) |
 | `Test_Liquidity.mq5` | nearest above/below, absence returns false instead of a fake price |
 | `Test_Canonical.mq5` | timeframe name round trip, digest determinism and length, bookkeeping fields excluded, state changes alter the digest, serialise/deserialise round trip, malformed lines refused, equivalence with and without price tolerance |
+| `Test_Expiry.mq5` | expiry time wins over a dead zone, dead zone invalidates before expiry, price through the stop invalidates both directions, unknown price skips the price check, executed signals never expire, `Process` touches only pre-execution states and is idempotent |
+| `Test_Instrumentation.mq5` | funnel stages keep their index and accumulate drop reasons, invalid indices are safe, profiler records only when enabled, event bus is FIFO and refuses an empty pop, dispatcher fan-out, name/filter subscription and delivery counting, ledger receives bus events with monotonic ids |
 
 ### Integration
 
@@ -78,7 +80,7 @@ the symbol). A run with skips is inconclusive for those items.
 
 ```bash
 cd QNTUM
-python3 Tools/mql5check.py          # structural check, 184 files
+python3 Tools/mql5check.py          # structural check, 188 files
 python3 Tools/mql5fields.py         # member/field access heuristic
 ```
 
@@ -92,7 +94,7 @@ Neither tool is a compiler.
 Current result:
 
 ```
-scanned 184 files (184 implemented, 0 empty)
+scanned 188 files (188 implemented, 0 empty)
 OK: no structural errors detected (this is NOT a compilation proof)
 ```
 

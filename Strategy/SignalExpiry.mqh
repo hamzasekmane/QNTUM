@@ -3,10 +3,10 @@
 //|  Expiration and invalidation of live signals.                        |
 //|                                                                   |
 //|  A signal expires when:                                            |
-//|   * its configured expiry time has passed OR                        |
-//|   * the entry timeframe moved `maxBars` closed bars past creation OR   |
-//|   * price already violated the stop before execution OR               |
-//|   * the zone it was based on became invalid.                          |
+//|   * its configured expiry time has passed (-> EXPIRED) OR             |
+//|   * price already violated the stop before execution (-> INVALIDATED) |
+//|   * the zone it was based on is gone or no longer active             |
+//|     (-> INVALIDATED).                                                |
 //+------------------------------------------------------------------+
 #ifndef __QME_STRATEGY_SIGNALEXPIRY_MQH__
 #define __QME_STRATEGY_SIGNALEXPIRY_MQH__
