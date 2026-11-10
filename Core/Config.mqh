@@ -194,14 +194,14 @@ public:
    int               PipelineTimeframes(ENUM_TIMEFRAMES &out[]);
 
    //--- session policy
-   bool              SessionAllowed(const ENUM_QME_SESSION s);
+   bool              SessionAllowed(const ENUM_QME_SESSION s) const;
 
    //--- is the GMT time inside a manual blackout window?
-   bool              InBlackoutWindow(const datetime gmtTime);
+   bool              InBlackoutWindow(const datetime gmtTime) const;
 
    //--- trading authorization flags (checked again at execution time)
-   bool              DemoTradingEnabled()  { return(In.enableDemoTrading && !In.analysisOnly); }
-   bool              RealTradingEnabled()  { return(In.enableRealTrading && In.realTradingArmed && !In.analysisOnly); }
+   bool              DemoTradingEnabled() const { return(In.enableDemoTrading && !In.analysisOnly); }
+   bool              RealTradingEnabled() const { return(In.enableRealTrading && In.realTradingArmed && !In.analysisOnly); }
 
 private:
    bool              m_blackoutsParsed;
@@ -359,7 +359,7 @@ bool CConfig::ParseBlackouts(string &err)
   }
 
 //------------------------------------------------------------------//
-bool CConfig::InBlackoutWindow(const datetime gmtTime)
+bool CConfig::InBlackoutWindow(const datetime gmtTime) const
   {
    if(!In.newsFilterEnabled || !m_blackoutsParsed || m_blackoutCount <= 0)
       return(false);
@@ -421,7 +421,7 @@ int CConfig::PipelineTimeframes(ENUM_TIMEFRAMES &out[])
   }
 
 //------------------------------------------------------------------//
-bool CConfig::SessionAllowed(const ENUM_QME_SESSION s)
+bool CConfig::SessionAllowed(const ENUM_QME_SESSION s) const
   {
    if(!In.sessionFilterEnabled) return(true);
    switch(s)

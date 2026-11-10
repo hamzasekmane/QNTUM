@@ -253,7 +253,9 @@ bool CEngine::Init(const SInputs &in, string &err)
    m_controller.Init(m_cfg, m_account.Snapshot());
 
    m_ready = true;
-   QmeLogMsg(QME_LOG_INFO, "Engine", "initialised on " + m_account.Snapshot().symbol +
+   const SAccountContext acc0 = m_account.Snapshot();
+   QmeLogMsg(QME_LOG_INFO, "Engine", "initialised on account " +
+             IntegerToString(acc0.login) + " (" + acc0.server + ")" +
              " magic " + IntegerToString((long)m_cfg.In.magic) + "; " + m_controller.Describe());
    return(true);
   }

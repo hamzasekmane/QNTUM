@@ -50,3 +50,14 @@ Compilation evidence: **none yet** — awaiting the round-2 MetaEditor log.
   `maxSignalsPerDay` wired, broken `ZoneMerger`/`LiquidityMap` includes,
   and the vacuous include check in `mql5check.py`. Details in git log
   (commits `f5e477d`…`f502215`) and `Phase0_Audit.md` §8.
+
+## 2026-11-10 — Round 2: second MetaEditor log (2 errors / 1 warning)
+
+Down from 101/27. (1) Engine init log read `.symbol` from the account
+snapshot, which has no such field — it now logs account login and server.
+(2) `CRuntimeDiagnostics` received a const config but the authorization
+accessors were non-const — `DemoTradingEnabled`, `RealTradingEnabled`,
+`SessionAllowed` and `InBlackoutWindow` are const now (all read-only).
+`Tools/mql5fields.py` additionally resolves method-call chains through
+declared return types, so this defect class is caught statically from
+now on (probe-verified). Awaiting the round-3 compile log.
