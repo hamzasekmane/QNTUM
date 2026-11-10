@@ -58,6 +58,7 @@ private:
    SInputs            m_in;
    CConfig            m_cfg;
    bool               m_ready;
+   bool               m_inCycle;
    string             m_error;
 
    CAccountContext    m_account;
@@ -140,6 +141,7 @@ public:
 CEngine::CEngine(void)
   {
    m_ready = false;
+   m_inCycle = false;
    m_error = "";
    m_cycles = 0;
    m_signalsTotal = 0;
@@ -409,6 +411,14 @@ bool CEngine::Cycle(const bool force, string &note)
       note = "engine not ready";
       return(false);
      }
+   //--- re-entrancy guard: a cycle can never run inside another cycle
+   if(m_inCycle)
+     {
+      note = "re-entrant cycle skipped";
+      QmeLogMsg(QME_LOG_DEBUG, "Engine", note);
+      return(false);
+     }
+   m_inCycle = true;
 
    m_cycles++;
    m_clock.Refresh();
@@ -417,12 +427,14 @@ bool CEngine::Cycle(const bool force, string &note)
       m_errors++;
       m_controller.Fault("account refresh failed");
       note = "account refresh failed";
+      m_inCycle = false;
       return(false);
      }
 
    if(!m_scheduler.ScanDue(TimeCurrent()))
      {
       note = "scan not due";
+      m_inCycle = false;
       return(true);
      }
    m_scheduler.MarkScan(TimeCurrent());
@@ -432,6 +444,7 @@ bool CEngine::Cycle(const bool force, string &note)
      {
       m_errors++;
       note = "scan: " + scanNote;
+      m_inCycle = false;
       return(false);
      }
 
@@ -512,6 +525,7 @@ bool CEngine::Cycle(const bool force, string &note)
 
    note = "cycle " + IntegerToString((int)m_cycles) + ": " + IntegerToString(signalsThisCycle) +
           " signal(s), " + IntegerToString(approvedThisCycle) + " executed";
+   m_inCycle = false;
    return(true);
   }
 

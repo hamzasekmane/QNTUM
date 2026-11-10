@@ -158,3 +158,59 @@ Interfaces defined before bodies; each file compilable at the end of the phase.
    `TradingPermissions`, `MarginManager`, `AccountState`, `AccountContext`.
 10. `Core/HistoryGuard.mqh` + `Core/Funnel.mqh` (pipeline accounting used by every later stage).
 11. Static verification run + Phase 1 report.
+
+---
+
+## 8. Delivery status against this plan (as implemented)
+
+The plan above was executed in order. Final tree: **182 MQL5 source files, all
+non-empty, 25k+ lines**, plus 9 reports in `Documentation/`.
+
+| Phase | Scope | Status |
+|---|---|---|
+| 0 | Audit, inventory, dependency map, interface proposal, risk register, this plan | done |
+| 1 | `Core/` (15) + `Account/` (7) | done |
+| 2 | `Data/` (11) | done |
+| 3 | `Analysis/` (32 incl. `FactorCatalog`), `Zones/` (9) | done |
+| 4 | `Intelligence/` (9) | done |
+| 5 | `Strategy/` (14 incl. MTF) | done |
+| 6 | `Risk/` (11) | done |
+| 7 | `Execution/` (11) | done |
+| 8 | `Persistence/` (7) | done |
+| 9 | `Runtime/` (8), `Monitoring/` (6), `Output/` (7) | done |
+| 10 | `QME.mqh`, `QME_Main.mq5`, `Tests/` (17 programs), documentation | done |
+
+### Verification actually performed
+
+```
+$ python3 Tools/mql5check.py
+scanned 182 files (182 implemented, 0 empty)
+OK: no structural errors detected (this is NOT a compilation proof)
+```
+
+The checker validates include guards, brace/parenthesis balance, duplicate type
+declarations, unknown identifiers, misplaced `input` declarations and empty
+files. It is a structural check only.
+
+### Verification NOT performed (and why)
+
+* **Compilation** — no MetaEditor, no MT5 terminal, no Wine in the build
+  environment. No compilation result is claimed anywhere in this repository.
+* **Test execution** — the 17 test programs have never been run here. They are
+  written to fail loudly (`INIT_FAILED`) and to `SKIP` (never pass) when the
+  environment lacks market data.
+* **Backtests / forward tests** — none exist and none are reported.
+
+See `DeploymentGuide.md` for the exact MetaEditor commands and the ordered
+progression from analysis mode to DEMO to REAL.
+
+### Deviations from the plan, and why
+
+| Decision | Reason |
+|---|---|
+| Added `Tests/TestKit.mqh` (not in the original inventory) | a shared assertion harness instead of 17 copies of the same code |
+| `Risk/` has no dependency on `Strategy/` | the plan is rebuilt inside the risk engine; it removed a cycle and is re-validated by the 17-gate checklist |
+| `CReplayEngine` replays *decisions*, not market data | market frames are not stored; the audit checks decision invariants, and the documentation says so explicitly |
+| `CCorrelationRisk` is a heuristic table, not a covariance model | honest labelling beats a fake statistics module |
+| `CNewsFilter` uses configured GMT windows only | no economic calendar is bundled or fabricated |
+| `closeOnOppositeSignal` is accepted but not acted on | implementing it would add an automatic close path; it is marked reserved in the configuration reference rather than silently ignored |
