@@ -1,0 +1,47 @@
+# Compilation Report — QuantumMarketEngine
+
+> Honest-status document. Labels: PASS / FAIL / BLOCKED / NOT TESTED.
+
+## Baseline (before repair)
+
+- Source: user-supplied MetaEditor log for `QME_Main.mq5`, 2026-11-10.
+- Result: **101 errors, 27 warnings** — FAIL.
+- The compiler capped reporting at 101 errors, so the baseline is a
+  lower bound, not a complete list.
+
+## Repair round 1 (2026-11-10, branch arena/906b7dd1-qntum)
+
+All 12 root causes from the baseline were repaired (see
+`DefectRegister.md` D-001…D-017 and `RepairHistory.md`). Static
+verification after the repair:
+
+```
+$ python3 Tools/mql5check.py
+scanned 188 files (188 implemented, 0 empty)
+OK: no structural errors detected (this is NOT a compilation proof)
+
+$ python3 Tools/mql5fields.py
+-- 0 suspicious member access(es); this is a heuristic, not a compiler
+
+$ python3 Tools/mql5calls.py
+-- 0 arity mismatch(es); this is a heuristic, not a compiler
+```
+
+## Current status
+
+| Target | Status | Evidence |
+|---|---|---|
+| `QME_Main.mq5` MetaEditor compile (round 2) | **NOT TESTED** | no MetaEditor/MT5/Wine in this environment |
+| 20 test `.mq5` programs compile | **NOT TESTED** | same |
+| Static structure/member/arity checks | PASS (heuristics) | tool output above |
+| Runtime behaviour, DEMO, backtest | **NOT TESTED** | — |
+
+## Exact local compilation commands (Windows, adjust paths)
+
+```bat
+"C:\Program Files\MetaTrader 5\metaeditor64.exe" /compile:"<repo>\QME_Main.mq5" /log
+for %f in ("<repo>\Tests\*\Test_*.mq5") do "C:\Program Files\MetaTrader 5\metaeditor64.exe" /compile:"%f" /log
+```
+
+Paste the new log back and round 2 will be worked from it, in the same
+root-cause order. Do not treat the static PASS rows as "it compiles".
