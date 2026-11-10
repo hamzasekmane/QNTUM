@@ -28,7 +28,7 @@
 | D-017 | LOW | long→int / ulong→long / double→int conversion warnings | implicit narrowing | FIXED — explicit int clamp, ulong size, `(int)` mode cast |
 | D-018 | MEDIUM | `mql5check.py` include-resolution check was vacuous | includes collected from string-blanked text | FIXED (previous session) — raw-text collection, probe-verified |
 | D-019 | MEDIUM | Nine helper classes not on the runtime path | implemented library code, deliberately unwired (behaviour change unverifiable here) | OPEN — documented in Phase0_Audit §8; wire only with compile+DEMO evidence |
-| D-020 | HIGH | No compilation/test/backtest evidence for the repaired tree | no MetaEditor/MT5 in the build environment | OPEN — awaiting user-side compile log (round 2) |
+| D-020 | HIGH | No compilation/test/backtest evidence for the repaired tree | no MetaEditor/MT5 in the build environment | PARTIALLY CLOSED — `QME_Main.mq5` compiled 0/0 on 2026-11-10 (round 3); the 20 test programs, test execution, DEMO and backtest evidence still outstanding |
 | D-021 | LOW | `Monitoring → Runtime/AlgoContainers` upward include | containers physically in Runtime | OPEN — relocation candidate to Core, not yet moved |
 | D-022 | CRITICAL | `m_account.Snapshot().symbol` in Engine init log | `SAccountContext` has no `symbol` (accounts have login/server, not a symbol) | FIXED (round 2) — logs account login + server |
 | D-023 | HIGH | `CRuntimeDiagnostics` called `CConfig::RealTradingEnabled()` on a const config | authorization accessors were non-const | FIXED (round 2) — `Demo/RealTradingEnabled`, `SessionAllowed`, `InBlackoutWindow` are now const (all read-only) |

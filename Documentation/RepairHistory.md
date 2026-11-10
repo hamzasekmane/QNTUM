@@ -61,3 +61,11 @@ accessors were non-const — `DemoTradingEnabled`, `RealTradingEnabled`,
 `Tools/mql5fields.py` additionally resolves method-call chains through
 declared return types, so this defect class is caught statically from
 now on (probe-verified). Awaiting the round-3 compile log.
+
+## 2026-11-10 — Round 3: compilation PASS
+
+User-compiled `QME_Main.mq5`: **0 errors, 0 warnings** (115 ms).
+Progression across rounds: 101/27 → 2/1 → 0/0. The main Expert Advisor
+is now valid, clean-compiling MQL5. Next evidence required: compile the
+20 test programs, then execute them (Strategy Tester / DEMO), then a
+DEMO forward run. No claim beyond compilation is made yet.
