@@ -30,6 +30,8 @@
 | D-019 | MEDIUM | Nine helper classes not on the runtime path | implemented library code, deliberately unwired (behaviour change unverifiable here) | OPEN — documented in Phase0_Audit §8; wire only with compile+DEMO evidence |
 | D-020 | HIGH | No compilation/test/backtest evidence for the repaired tree | no MetaEditor/MT5 in the build environment | OPEN — awaiting user-side compile log (round 2) |
 | D-021 | LOW | `Monitoring → Runtime/AlgoContainers` upward include | containers physically in Runtime | OPEN — relocation candidate to Core, not yet moved |
+| D-022 | CRITICAL | `m_account.Snapshot().symbol` in Engine init log | `SAccountContext` has no `symbol` (accounts have login/server, not a symbol) | FIXED (round 2) — logs account login + server |
+| D-023 | HIGH | `CRuntimeDiagnostics` called `CConfig::RealTradingEnabled()` on a const config | authorization accessors were non-const | FIXED (round 2) — `Demo/RealTradingEnabled`, `SessionAllowed`, `InBlackoutWindow` are now const (all read-only) |
 
 ## Rules for this register
 

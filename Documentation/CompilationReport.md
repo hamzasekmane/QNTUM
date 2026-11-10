@@ -31,7 +31,7 @@ $ python3 Tools/mql5calls.py
 
 | Target | Status | Evidence |
 |---|---|---|
-| `QME_Main.mq5` MetaEditor compile (round 2) | **NOT TESTED** | no MetaEditor/MT5/Wine in this environment |
+| `QME_Main.mq5` MetaEditor compile (round 2) | **FAIL → repaired, awaiting round 3** | user log 2026-11-10: 2 errors, 1 warning (D-022, D-023); both fixed in source |
 | 20 test `.mq5` programs compile | **NOT TESTED** | same |
 | Static structure/member/arity checks | PASS (heuristics) | tool output above |
 | Runtime behaviour, DEMO, backtest | **NOT TESTED** | — |
@@ -45,3 +45,13 @@ for %f in ("<repo>\Tests\*\Test_*.mq5") do "C:\Program Files\MetaTrader 5\metaed
 
 Paste the new log back and round 2 will be worked from it, in the same
 root-cause order. Do not treat the static PASS rows as "it compiles".
+
+## Repair round 2 (2026-11-10)
+
+User-compiled `QME_Main.mq5` again: **2 errors, 1 warning** (down from
+101/27). Both defects repaired: D-022 (account snapshot has no `symbol`)
+and D-023 (authorization accessors not const). The fields checker was
+extended to resolve method-call chains through declared return types
+(`Snapshot().symbol` is now caught statically; probe-verified). Status:
+awaiting the round-3 log, which is also the first real chance to see
+whether the error count reaches zero or only warnings remain.

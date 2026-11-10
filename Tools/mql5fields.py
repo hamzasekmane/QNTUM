@@ -87,9 +87,9 @@ for p, s in src.items():
         if m.group(1) in types:
             decls.append((m.start(), m.group(2), m.group(1)))
     decls.sort()
-    for m in re.finditer(r'\b([a-z_]\w*)((?:\.[A-Za-z_]\w*)+)\b', s):
+    for m in re.finditer(r'\b([a-z_]\w*)((?:\.[A-Za-z_]\w*(?:\([^()]*\))?)+)\b', s):
         var = m.group(1)
-        chain = [c for c in m.group(2).split('.') if c]
+        chain = [c.split('(')[0] for c in m.group(2).split('.') if c]
         if m.start() > 0 and s[m.start() - 1] == '.':
             continue                             # middle of a longer chain
         t = None
@@ -108,7 +108,13 @@ for p, s in src.items():
             if not mems and not meths:
                 break
             if mem in meths and mem not in mems:
-                break                            # method call: return type unknown
+                # method call: continue the chain through its declared
+                # return type when it is a known type (e.g. Snapshot().login)
+                nxt = member_type(cur, mem)
+                if nxt in types:
+                    cur = nxt
+                    continue
+                break
             if mem not in mems:
                 problems.append((str(p.relative_to(ROOT)), line, cur, var, mem))
                 break

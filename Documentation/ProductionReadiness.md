@@ -6,7 +6,7 @@
 |---|---|---|
 | Source completeness (all layers implemented) | PASS | 188 files, 0 empty (mql5check) |
 | Static structure/member/arity checks | PASS (heuristic) | Tools output in CompilationReport.md |
-| MetaEditor compilation, `QME_Main.mq5` | **NOT TESTED** | round-1 repair awaits a fresh log (D-020) |
+| MetaEditor compilation, `QME_Main.mq5` | **IN PROGRESS** | round 2: 2 errors/1 warning, both repaired; awaiting round-3 log (D-020) |
 | Test programs compile (20) | **NOT TESTED** | same log |
 | Test programs execute and pass | **NOT TESTED** | never run; they SKIP without market data by design |
 | Strategy Tester backtest | **NOT TESTED** | none exists |
