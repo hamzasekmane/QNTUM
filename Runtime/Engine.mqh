@@ -127,7 +127,7 @@ private:
 public:
                      CEngine(void);
                     ~CEngine(void) { Deinit("destructor"); }
-   bool              Init(const SInputs &input, string &err);
+   bool              Init(const SInputs &in, string &err);
    void              Deinit(const string reason);
 
    bool              Cycle(const bool force, string &note);
@@ -172,10 +172,10 @@ CEngine::CEngine(void)
   }
 
 //------------------------------------------------------------------//
-bool CEngine::Init(const SInputs &input, string &err)
+bool CEngine::Init(const SInputs &in, string &err)
   {
    err = "";
-   m_in = input;
+   m_in = in;
 
    if(!m_cfg.Init(m_in, err))
      {

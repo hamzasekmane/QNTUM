@@ -73,11 +73,13 @@ bool CCausalValidator::EvidenceIsCausal(const SMarketAnalysis &a, const datetime
         }
      }
 
-   //--- structural events
-   const SStructureEvent events[3] = {a.bos, a.mss, a.breakout};
-   for(int i = 0; i < 3; i++)
-      if(events[i].valid && events[i].time > decisionTime)
-        { why = "structure event timestamp in the future"; return(false); }
+   //--- structural events (MQL5 has no aggregate init for struct arrays)
+   if(a.bos.valid && a.bos.time > decisionTime)
+     { why = "structure event timestamp in the future"; return(false); }
+   if(a.mss.valid && a.mss.time > decisionTime)
+     { why = "structure event timestamp in the future"; return(false); }
+   if(a.breakout.valid && a.breakout.time > decisionTime)
+     { why = "structure event timestamp in the future"; return(false); }
 
    //--- price action evidence
    if(a.displacement.valid && a.displacement.time > decisionTime)

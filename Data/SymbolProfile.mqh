@@ -38,7 +38,7 @@ public:
    string            Symbol(void) { return(m_symbol); }
    string            LastError(void) { return(m_error); }
    SSymbolSpec       Spec(void) { return(m_spec); }
-   SSymbolSpec*      SpecPtr(void) { return(&m_spec); }
+   void              SpecInto(SSymbolSpec &out) { out = m_spec; }
    ENUM_QME_ASSET    Asset(void) { return(m_asset); }
    SAssetTuning      Tuning(void) { return(m_tuning); }
    double            Pip(void) { return(m_pip); }

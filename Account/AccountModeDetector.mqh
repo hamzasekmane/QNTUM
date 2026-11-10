@@ -30,7 +30,7 @@ public:
 //------------------------------------------------------------------//
 ENUM_QME_ACCOUNT_MODE CAccountModeDetector::Detect(void)
   {
-   const long mode = AccountInfoInteger(ACCOUNT_TRADE_MODE);
+   const int mode = (int)AccountInfoInteger(ACCOUNT_TRADE_MODE);
    switch(mode)
      {
       case ACCOUNT_TRADE_MODE_DEMO:    return(QME_ACC_DEMO);

@@ -37,7 +37,7 @@ for p, s in src.items():
         kind, name, base = m.group(1), m.group(2), m.group(3)
         body = block(s, m.end() - 1)
         members, methods, member_types = set(), set(), {}
-        for d in re.finditer(r'([A-Za-z_]\w*(?:\s*\*)?)\s+([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*(?:\(([^;{}]*)\))?\s*(?:;|\{)', body):
+        for d in re.finditer(r'([A-Za-z_]\w*(?:\s*\*)?)\s+([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*(?:\(([^;{}]*)\))?\s*(?:const\s*)?(?:;|\{)', body):
             nm = d.group(2)
             if nm == name:
                 continue

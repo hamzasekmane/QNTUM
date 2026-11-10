@@ -40,10 +40,8 @@ public:
    bool              Refresh(void);
 
    SAccountContext   Snapshot(void) { return(m_acc); }
-   SAccountContext*  Ptr(void) { return(&m_acc); }
    CAccountState*    State(void) { return(&m_state); }
    long              Login(void) { return(m_acc.login); }
-   CAccountState*    State(void) { return(&m_state); }
 
    ENUM_QME_ACCOUNT_MODE Mode(void) { return(m_acc.mode); }
    bool              IsDemo(void) { return(m_acc.mode == QME_ACC_DEMO); }
