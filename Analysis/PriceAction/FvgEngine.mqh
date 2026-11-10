@@ -35,14 +35,21 @@ public:
 int CFvgEngine::Detect(CBarSeries &series, const double atr, const double minSizeAtr,
                        const int scanBars, const int maxOut, SFvgRecord &out[])
   {
-   ArrayResize(out, 0);
+   //--- the output buffer belongs to the caller and may be a fixed-size
+   //--- struct member (e.g. SMarketAnalysis::fvgs): NEVER ArrayResize it.
+   //--- Capacity is min(maxOut, ArraySize(out)); only the first `found`
+   //--- entries are meaningful. (Resizing a fixed array fails silently in
+   //--- MQL5 and indexing past it crashed with "array out of range".)
    if(!series.IsValid() || maxOut <= 0) return(0);
+   const int capacity = MathMin(maxOut, ArraySize(out));
+   if(capacity <= 0) return(0);
 
    const double minSize = MathMax(atr * minSizeAtr, QME_PRICE_EPS);
    const int limit = MathMin(scanBars, series.Count() - 3);
+   if(limit <= 0) return(0);
    int found = 0;
 
-   for(int i = 0; i < limit && found < maxOut; i++)
+   for(int i = 0; i < limit && found < capacity; i++)
      {
       const double hi_i = series.High(i);
       const double lo_i = series.Low(i);
@@ -92,14 +99,12 @@ int CFvgEngine::Detect(CBarSeries &series, const double atr, const double minSiz
       else
          fillRatio = QmeClamp((maxHighNewer - lower) / size, 0.0, 1.0);
 
-      const int n = ArraySize(out);
-      ArrayResize(out, n + 1);
-      out[n].time = series.TimeAt(i + 1);
-      out[n].side = side;
-      out[n].upper = upper;
-      out[n].lower = lower;
-      out[n].fillRatio = fillRatio;
-      out[n].filled = (fillRatio >= 0.95);
+      out[found].time = series.TimeAt(i + 1);
+      out[found].side = side;
+      out[found].upper = upper;
+      out[found].lower = lower;
+      out[found].fillRatio = fillRatio;
+      out[found].filled = (fillRatio >= 0.95);
       found++;
      }
    return(found);

@@ -62,15 +62,20 @@ int RunRiskTests(void)
    g_kit.Begin("Unit/Test_Risk");
    const SSymbolSpec spec = RiskSpec();
 
-   //--- 10000 equity, 1% risk = 100 USD. 20 pips stop -> 1.00 lot.
+   //--- sizing audit against THIS mock spec (the derivation, not a guess):
+   //--- tickValue 1.0 per tickSize 0.00001 => 100000 USD per 1.00 of price
+   //--- per lot. A 20-pip stop (0.0020) therefore loses 200 USD per lot, so
+   //--- a 100 USD budget buys exactly 0.50 lots. (An earlier revision of
+   //--- this test expected 1.00/0.33 lots, which implies a 5 USD pip value
+   //--- this specification does not have; the engine was right.)
    const double riskMoney = 100.0;
    const double stopDistance = 20 * 0.0001;
    const double vol = CRiskBudget::VolumeForRisk(spec, riskMoney, stopDistance);
-   g_kit.CheckClose(vol, 1.00, 0.005, "1% of 10k with a 20 pip stop is 1.00 lot");
+   g_kit.CheckClose(vol, 0.50, 0.005, "1% of 10k with a 20 pip stop is 0.50 lot on this spec");
 
    //--- rounding is always DOWN to the broker step
    const double odd = CRiskBudget::VolumeForRisk(spec, 33.3, stopDistance);
-   g_kit.CheckClose(odd, 0.33, 0.0001, "volume rounds down to the lot step");
+   g_kit.CheckClose(odd, 0.16, 0.0001, "volume rounds down to the lot step");
    g_kit.Check(CRiskBudget::ActualRiskMoney(spec, odd, stopDistance) <= 33.3 + 1e-9,
                "actual risk never exceeds the budget");
 
@@ -83,6 +88,33 @@ int RunRiskTests(void)
                     "negative budget -> zero volume");
    g_kit.CheckClose(CRiskBudget::VolumeForRisk(spec, 1e9, stopDistance), spec.volMax, 1e-9,
                     "volume is capped by the broker maximum");
+
+   //--- a metals-style specification: tick 0.01 worth 1.0 => 100 per 1.00
+   //--- of price per lot; a 2.50 stop loses 250/lot; 100 budget => 0.40
+   SSymbolSpec xau = spec;
+   xau.symbol = "XAUUSD";
+   xau.digits = 2;
+   xau.point = 0.01;
+   xau.tickSize = 0.01;
+   xau.tickValue = 1.0;
+   xau.contractSize = 100.0;
+   g_kit.CheckClose(CRiskBudget::VolumeForRisk(xau, 100.0, 2.50), 0.40, 1e-9,
+                    "metals spec sizes from its own tick value/size");
+
+   //--- when even the broker minimum would exceed the budget: no trade
+   SSymbolSpec coarse = spec;
+   coarse.volMin = 0.50;
+   coarse.volStep = 0.50;
+   g_kit.CheckClose(CRiskBudget::VolumeForRisk(coarse, 50.0, stopDistance), 0.0, 1e-9,
+                    "minimum volume above budget yields zero, never the minimum");
+
+   //--- a coarse step still rounds DOWN, never up into the budget
+   SSymbolSpec stepSpec = spec;
+   stepSpec.volStep = 0.25;
+   const double stepped = CRiskBudget::VolumeForRisk(stepSpec, 90.0, stopDistance);
+   g_kit.CheckClose(stepped, 0.25, 1e-9, "0.45 raw rounds down to the 0.25 step");
+   g_kit.Check(CRiskBudget::ActualRiskMoney(stepSpec, stepped, stopDistance) <= 90.0 + 1e-9,
+               "stepped volume stays inside the budget");
 
    //--- risk as a percentage of equity
    g_kit.CheckClose(CRiskBudget::RiskPctOfEquity(100.0, 10000.0), 1.0, 1e-6,

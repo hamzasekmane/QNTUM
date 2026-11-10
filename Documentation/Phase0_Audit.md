@@ -178,13 +178,13 @@ non-empty, 25k+ lines**, plus 10 reports in `Documentation/`.
 | 7 | `Execution/` (11) | done |
 | 8 | `Persistence/` (7) | done |
 | 9 | `Runtime/` (8), `Monitoring/` (6), `Output/` (7) | done |
-| 10 | `QME.mqh`, `QME_Main.mq5`, `Tests/` (20 programs), documentation | done |
+| 10 | `QME.mqh`, `QME_Main.mq5`, `Tests/` (21 programs), documentation | done |
 
 ### Verification actually performed
 
 ```
 $ python3 Tools/mql5check.py
-scanned 188 files (188 implemented, 0 empty)
+scanned 190 files (190 implemented, 0 empty)
 OK: no structural errors detected (this is NOT a compilation proof)
 
 $ python3 Tools/mql5fields.py
@@ -209,7 +209,7 @@ call to a five-parameter function), all fixed. All three are static heuristics
 
 * **Compilation** — no MetaEditor, no MT5 terminal, no Wine in the build
   environment. No compilation result is claimed anywhere in this repository.
-* **Test execution** — the 20 test programs have never been run here. They are
+* **Test execution** — the 21 test programs have never been run here. They are
   written to fail loudly (`INIT_FAILED`) and to `SKIP` (never pass) when the
   environment lacks market data.
 * **Backtests / forward tests** — none exist and none are reported.

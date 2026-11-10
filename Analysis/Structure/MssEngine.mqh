@@ -83,8 +83,11 @@ SStructureEvent CMssEngine::Detect(CBarSeries &series, const SStructureState &st
 //------------------------------------------------------------------//
 bool CMssEngine::IsConfirmed(const SStructureState &state)
   {
-   return(state.mssConfirmed &&
-          (state.lastEvent == QME_STRUCT_MSS_UP || state.lastEvent == QME_STRUCT_MSS_DOWN));
+   //--- the flag IS the confirmation record: it is set by the scanner from
+   //--- the detected MSS event (with mssSide). It must not be gated on a
+   //--- second, independently-maintained field (lastEvent), which left
+   //--- this permanently false and the flag meaningless.
+   return(state.mssConfirmed);
   }
 
 #endif // __QME_ANALYSIS_MSSENGINE_MQH__

@@ -9,7 +9,7 @@
 
 | Measure | Count |
 |---|---|
-| MQL5 source files scanned by `Tools/mql5check.py` | 188 (all implemented, 0 empty) |
+| MQL5 source files scanned by `Tools/mql5check.py` | 190 (all implemented, 0 empty) |
 | Documentation files (before this audit set) | 10 |
 | Classes (incl. the `IQmeEventSink` interface) | 146 |
 | Test programs | 20 (18 suites + `TestKit.mqh` + wrappers counted by layer scan) |

@@ -43,8 +43,6 @@ SEntrySpec CEntryRig::FromZone(const STradingZone &zone, const ENUM_QME_SIDE sid
    QmeEntrySpecClear(e);
    e.side = side;
    e.zoneId = zone.id;
-   e.zoneUpper = MathMax(zone.upper, zone.lower);
-   e.zoneLower = MathMin(zone.upper, zone.lower);
    e.type = QME_ENTRY_LIMIT;
 
    if(side == QME_SIDE_NONE || price <= 0.0 || atr <= 0.0)
@@ -53,6 +51,18 @@ SEntrySpec CEntryRig::FromZone(const STradingZone &zone, const ENUM_QME_SIDE sid
       e.note = "invalid inputs";
       return(e);
      }
+
+   //--- an inverted or degenerate zone is refused, never repaired by
+   //--- swapping its edges: manufactured geometry manufactures risk
+   if(zone.upper <= zone.lower)
+     {
+      e.reason = QME_REJ_INVALIDATED;
+      e.note = "zone geometry invalid: upper " + DoubleToString(zone.upper, 5) +
+               " <= lower " + DoubleToString(zone.lower, 5);
+      return(e);
+     }
+   e.zoneUpper = zone.upper;
+   e.zoneLower = zone.lower;
 
    const double buffer = MathMax(atr * bufferAtr, point * 2.0);
    const double brokerStop = CSymbolSpecifications::MinStopDistance(spec);
@@ -129,6 +139,13 @@ SEntrySpec CEntryRig::FromZone(const STradingZone &zone, const ENUM_QME_SIDE sid
       e.target1 = e.entry - rrTarget * dist;
       e.target2 = e.entry - 1.5 * rrTarget * dist;
      }
+   e.target1 = CSymbolSpecifications::NormalizePrice(spec, e.target1);
+   e.target2 = CSymbolSpecifications::NormalizePrice(spec, e.target2);
+
+   //--- RR is derived from the ACTUAL normalized entry/stop/target, not
+   //--- merely copied from the request: normalization and any stop
+   //--- widening above change the true geometry
+   e.rr = (dist > 0.0) ? MathAbs(e.target1 - e.entry) / dist : 0.0;
 
    e.valid = true;
    return(e);

@@ -61,3 +61,42 @@ accessors were non-const — `DemoTradingEnabled`, `RealTradingEnabled`,
 `Tools/mql5fields.py` additionally resolves method-call chains through
 declared return types, so this defect class is caught statically from
 now on (probe-verified). Awaiting the round-3 compile log.
+
+## 2026-11-10 — Round 3: compilation PASS
+
+User-compiled `QME_Main.mq5`: **0 errors, 0 warnings** (115 ms).
+Progression across rounds: 101/27 → 2/1 → 0/0. The main Expert Advisor
+is now valid, clean-compiling MQL5. Next evidence required: compile the
+20 test programs, then execute them (Strategy Tester / DEMO), then a
+DEMO forward run. No claim beyond compilation is made yet.
+
+## 2026-11-10 — Test-failure repair round (first executed results)
+
+The user executed the suites; nine failure groups were reported and
+repaired by root cause (register D-024…D-031):
+
+1. **P0 crash**: FVG/OrderBlock detectors resized fixed-size caller
+   buffers — removed all resizing, capacity-bounded writes, new
+   `Tests/Unit/Test_FvgSafety` regression suite.
+2. **analysisOnly precedence**: the hard config block is now the first
+   check in `CExecutionValidator::Local`; multi-fault test added.
+3. **Dedup persistence**: `Deserialize` scratch-parses, rejects
+   malformed lines (no timestamp, empty, duplicate), never wipes held
+   state on garbage; two tests corrected to documented semantics
+   (register both fingerprints; a just-fired signal STAYS blocked after
+   restart) and extended.
+4. **EntryRig**: inverted/degenerate zones refused with reason; `rr`
+   derived from actual normalized geometry; SELL-side tests added.
+5. **Risk sizing**: full audit against the mock spec — the engine was
+   right (200 USD/lot at the stop); test expectations corrected with
+   derivations, metals/coarse/minimum cases added. Risk limits unchanged.
+6. **Expiry**: `Check` and `Process` share the pre-execution-only rule;
+   EXECUTED/MONITORING can never expire.
+7. **MSS**: flag is authoritative; scanner syncs it (plus side and
+   lastEvent) from the detected event.
+8. **Zones**: merge metric (% of smaller zone) documented in the test;
+   threshold-gate, containment and duplicate cases added; merges now
+   set `merged = true`.
+
+Evidence: three static checkers pass; `TestResults.md` records the
+round-1 failures and marks every re-run NOT TESTED until executed.

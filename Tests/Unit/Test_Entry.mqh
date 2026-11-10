@@ -88,6 +88,23 @@ int RunEntryTests(void)
    g_kit.Check(sell.valid, "sell rig is valid for a clean supply zone");
    g_kit.Check(sell.stop > sell.entry, "sell stop is above the entry");
    g_kit.Check(sell.target1 < sell.entry, "sell target is below the entry");
+   g_kit.Check(sell.rr >= 1.5, "sell rr respects the request");
+
+   //--- an inverted SELL zone is refused with a reason too
+   STradingZone brokenSell = supply;
+   brokenSell.upper = 1.10100;
+   brokenSell.lower = 1.10300;
+   const SEntrySpec badSell = CEntryRig::FromZone(brokenSell, QME_SIDE_SELL, 1.10250, 0.00100,
+                                                  0.00001, spec, 2.0, 3.0, 0.25);
+   g_kit.Check(!badSell.valid, "inverted sell zone is refused");
+   g_kit.Check(badSell.reason != QME_REJ_NONE, "sell refusal carries a reason");
+
+   //--- a degenerate (zero-height) zone has no geometry to trade
+   STradingZone flat = demand;
+   flat.upper = flat.lower;
+   const SEntrySpec flatSpec = CEntryRig::FromZone(flat, QME_SIDE_BUY, 1.10050, 0.00100,
+                                                   0.00001, spec, 2.0, 3.0, 0.25);
+   g_kit.Check(!flatSpec.valid, "zero-height zone is refused");
 
    //--- an inverted zone must be refused, not repaired
    STradingZone broken = demand;

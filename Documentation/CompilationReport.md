@@ -17,7 +17,7 @@ verification after the repair:
 
 ```
 $ python3 Tools/mql5check.py
-scanned 188 files (188 implemented, 0 empty)
+scanned 190 files (190 implemented, 0 empty)
 OK: no structural errors detected (this is NOT a compilation proof)
 
 $ python3 Tools/mql5fields.py
@@ -31,8 +31,8 @@ $ python3 Tools/mql5calls.py
 
 | Target | Status | Evidence |
 |---|---|---|
-| `QME_Main.mq5` MetaEditor compile (round 2) | **FAIL → repaired, awaiting round 3** | user log 2026-11-10: 2 errors, 1 warning (D-022, D-023); both fixed in source |
-| 20 test `.mq5` programs compile | **NOT TESTED** | same |
+| `QME_Main.mq5` MetaEditor compile (round 3) | **PASS** | user log 2026-11-10: `0 errors, 0 warnings, 115 ms elapsed` |
+| 21 test `.mq5` programs compile | **NOT TESTED** | same |
 | Static structure/member/arity checks | PASS (heuristics) | tool output above |
 | Runtime behaviour, DEMO, backtest | **NOT TESTED** | — |
 
@@ -52,6 +52,19 @@ User-compiled `QME_Main.mq5` again: **2 errors, 1 warning** (down from
 101/27). Both defects repaired: D-022 (account snapshot has no `symbol`)
 and D-023 (authorization accessors not const). The fields checker was
 extended to resolve method-call chains through declared return types
-(`Snapshot().symbol` is now caught statically; probe-verified). Status:
-awaiting the round-3 log, which is also the first real chance to see
-whether the error count reaches zero or only warnings remain.
+(`Snapshot().symbol` is now caught statically; probe-verified).
+
+## Repair round 3 (2026-11-10) — compilation PASS
+
+User-compiled `QME_Main.mq5` in MetaEditor with the round-2 repairs:
+
+```
+0 errors, 0 warnings, 115 ms elapsed, cpu='AVX2 + FMA3'
+```
+
+**`QME_Main.mq5` now compiles cleanly.** Progression: 101 errors /
+27 warnings → 2 / 1 → 0 / 0.
+
+Remaining compile targets: the 21 test programs under `Tests/` have not
+been compiled yet. Runtime behaviour (DEMO, tester, backtest) remains
+NOT TESTED — a clean compile proves only that the code is valid MQL5.

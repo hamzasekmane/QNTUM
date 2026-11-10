@@ -1,6 +1,6 @@
 # QuantumMarketEngine — Architecture
 
-> Status: implemented. 188 source files, all non-empty. Structural verification:
+> Status: implemented. 190 source files, all non-empty. Structural verification:
 > `python3 Tools/mql5check.py` → `OK: no structural errors detected`.
 > **No compiler was available in the build environment** — see `DeploymentGuide.md`
 > for the exact MetaEditor steps and the honesty policy about compilation.
@@ -107,7 +107,7 @@ Three observers run alongside the cycle and never influence a decision:
 | `Runtime/` | 8 | containers, scanner, scheduler, snapshot, replay, controller, shutdown, engine |
 | `Monitoring/` | 6 | errors, performance, execution stats, health, diagnostics, watchdog |
 | `Output/` | 7 | alert ports/guard/engine/binding, explanations, dashboard, visualisation |
-| `Tests/` | 20 programs | unit, integration, regression, validation |
+| `Tests/` | 21 programs | unit, integration, regression, validation |
 
 ## 5. Event and state ownership
 
