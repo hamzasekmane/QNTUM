@@ -1,7 +1,12 @@
 # QuantumMarketEngine — Configuration Reference
 
 All inputs are declared in `QME_Main.mq5` and validated by `CConfig::Init`.
-**Every trading switch defaults to `false`; `analysisOnly` defaults to `true`.**
+**Every trading switch defaults to `false`; `InpAnalysisOnly` defaults to `true`.**
+
+> Naming: in the terminal the inputs carry the `Inp` prefix
+> (`InpMagicNumber`, `InpMinimumRiskReward`, `InpMaximumRetries`, …) so they
+> can never shadow function parameters. The tables below use the underlying
+> `SInputs` field names; the mapping is one-to-one in `BuildInputs`.
 
 ## 1. Runtime
 

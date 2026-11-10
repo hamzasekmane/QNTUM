@@ -47,10 +47,9 @@ public:
                            const double price, const double atr);
 
    int               Count(void) { return(ArraySize(m_zones)); }
-   int               ActiveCount(const datetime now);
+   int               ActiveCount(const datetime now) const;
    bool              At(const int i, STradingZone &out);
    bool              ById(const ulong id, STradingZone &out);
-   STradingZone*     PtrAt(const int i);
    int               MergedCount(void) { return(m_merged); }
    int               InvalidatedCount(void) { return(m_invalidated); }
 
@@ -207,7 +206,7 @@ int CZoneBoard::Prune(const datetime now, const int retentionHours,
   }
 
 //------------------------------------------------------------------//
-int CZoneBoard::ActiveCount(const datetime now)
+int CZoneBoard::ActiveCount(const datetime now) const
   {
    int n = 0;
    for(int i = 0; i < ArraySize(m_zones); i++)
@@ -231,12 +230,6 @@ bool CZoneBoard::ById(const ulong id, STradingZone &out)
    if(i < 0) return(false);
    out = m_zones[i];
    return(true);
-  }
-
-STradingZone* CZoneBoard::PtrAt(const int i)
-  {
-   if(i < 0 || i >= ArraySize(m_zones)) return(NULL);
-   return(GetPointer(m_zones[i]));
   }
 
 //------------------------------------------------------------------//

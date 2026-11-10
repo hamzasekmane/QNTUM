@@ -37,7 +37,7 @@ public:
 
    CZoneBoard*       Board(void) { return(&m_board); }
    int               Count(void) { return(m_board.Count()); }
-   int               ActiveCount(const datetime now) { return(m_board.ActiveCount(now)); }
+   int               ActiveCount(const datetime now) const { return(m_board.ActiveCount(now)); }
 
    bool              BestZone(const ENUM_QME_SIDE side, const double price,
                               const double atr, const datetime now,

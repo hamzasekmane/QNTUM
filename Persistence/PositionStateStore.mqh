@@ -48,7 +48,7 @@ public:
    bool              Close(const ulong ticket);
    int               Count(void) { return(m_count); }
    int               OpenCount(void);
-   int               At(const int i, STrackedPosition &out);
+   bool              At(const int i, STrackedPosition &out);
 
    //--- drop records the broker no longer has; returns how many were dropped
    int               ReconcileWithBroker(const ulong magic);

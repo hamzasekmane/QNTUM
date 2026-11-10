@@ -73,6 +73,9 @@ bool CTransactionHandler::Handle(const MqlTradeTransaction &trans, const MqlTrad
                                  const MqlTradeResult &result, SExecutionResult &out)
   {
    QmeExecClear(out);
+   //--- MqlTradeTransaction carries no timestamp; event time is "now",
+   //--- refined to the deal's own time below when history is available
+   datetime eventTime = TimeCurrent();
 
    if(trans.type == TRADE_TRANSACTION_DEAL_ADD)
      {
@@ -83,7 +86,6 @@ bool CTransactionHandler::Handle(const MqlTradeTransaction &trans, const MqlTrad
         }
       m_deals++;
       m_lastDeal = trans.deal;
-      m_lastTime = trans.time;
 
       double volume = 0.0, price = 0.0;
       long entry = 0;
@@ -92,7 +94,10 @@ bool CTransactionHandler::Handle(const MqlTradeTransaction &trans, const MqlTrad
          volume = HistoryDealGetDouble(trans.deal, DEAL_VOLUME);
          price = HistoryDealGetDouble(trans.deal, DEAL_PRICE);
          entry = HistoryDealGetInteger(trans.deal, DEAL_ENTRY);
+         const datetime dealTime = (datetime)HistoryDealGetInteger(trans.deal, DEAL_TIME);
+         if(dealTime > 0) eventTime = dealTime;
         }
+      m_lastTime = eventTime;
 
       out.dealTicket = trans.deal;
       out.orderTicket = trans.order;
@@ -101,13 +106,13 @@ bool CTransactionHandler::Handle(const MqlTradeTransaction &trans, const MqlTrad
       out.filledPrice = price;
       out.confirmed = true;
       out.state = QME_EXEC_CONFIRMED;
-      out.time = trans.time;
+      out.time = eventTime;
       out.comment = "deal " + IntegerToString((long)trans.deal) +
                     " entry=" + IntegerToString((int)entry) +
                     " vol=" + DoubleToString(volume, 2);
 
       QmeLogMsg(QME_LOG_INFO, "Trade", "deal " + IntegerToString((long)trans.deal) +
-                " on symbol " + IntegerToString((long)trans.symbol) + ": " + out.comment);
+                " on symbol " + trans.symbol + ": " + out.comment);
       return(true);
      }
 
@@ -120,11 +125,11 @@ bool CTransactionHandler::Handle(const MqlTradeTransaction &trans, const MqlTrad
         }
       m_orders++;
       m_lastOrder = trans.order;
-      m_lastTime = trans.time;
+      m_lastTime = eventTime;
       QmeLogMsg(QME_LOG_INFO, "Trade", "order " + IntegerToString((long)trans.order) +
                 " state " + IntegerToString((int)trans.order_state));
       out.orderTicket = trans.order;
-      out.time = trans.time;
+      out.time = eventTime;
       out.comment = "order event";
       return(true);
      }
@@ -139,7 +144,7 @@ bool CTransactionHandler::Handle(const MqlTradeTransaction &trans, const MqlTrad
       QmeLogMsg(QME_LOG_WARN, "Trade", "order " + IntegerToString((long)trans.order) +
                 " was deleted (result retcode " + IntegerToString((int)result.retcode) + ")");
       out.orderTicket = trans.order;
-      out.time = trans.time;
+      out.time = eventTime;
       out.comment = "order deleted";
       return(true);
      }

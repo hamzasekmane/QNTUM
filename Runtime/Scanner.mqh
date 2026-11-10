@@ -69,7 +69,7 @@ bool CSymbolRuntime::Init(const string sym, const int idx, const SInputs &in, co
                                                           spec.description);
    CAssetClassTuning::Get(asset, tuning);
 
-   const ENUM_TIMEFRAMES tfs[QME_TF_SLOTS];
+   ENUM_TIMEFRAMES tfs[QME_TF_SLOTS];
    tfs[0] = in.tfContext;
    tfs[1] = in.tfBias;
    tfs[2] = in.tfStructure;
@@ -420,6 +420,9 @@ bool CScanner::BuildAnalysis(CSymbolRuntime &rt, const int slot, const datetime 
 
    //--- reaction at the nearest liquidity level on either side
    SLiquidityLevel lvl;
+   lvl.price = 0.0; lvl.side = QME_SIDE_NONE; lvl.observed = false;
+   lvl.strength = 0.0; lvl.touches = 0; lvl.birthTime = 0;
+   lvl.source = QME_ZONE_SRC_NONE;
    bool haveLevel = false;
    if(a.liquidityValid)
      {

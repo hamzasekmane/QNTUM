@@ -21,7 +21,7 @@ class CRetryPolicy
 public:
    static bool       ShouldRetry(const uint retcode, const int attempt, const int maxRetries);
    static bool       RequiresReconciliation(const uint retcode);
-   static int        DelayMs(const uint retcode, const int attempt);
+   static int        DelayMs(const uint retcode, const int attempt, const int baseMs = 250);
   };
 
 //------------------------------------------------------------------//

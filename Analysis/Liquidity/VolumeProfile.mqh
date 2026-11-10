@@ -45,7 +45,7 @@ bool CVolumeProfile::Build(CBarSeries &series, const int bars, const int buckets
    const int n = MathMin(bars, series.Count());
    if(n < 10) return(false);
 
-   const int bucketsWanted = QmeClamp(buckets, 8, 63);
+   const int bucketsWanted = (buckets < 8) ? 8 : ((buckets > 63) ? 63 : buckets);
    const double hi = series.Highest(0, n);
    const double lo = series.Lowest(0, n);
    if(hi <= 0.0 || lo <= 0.0 || hi <= lo) return(false);

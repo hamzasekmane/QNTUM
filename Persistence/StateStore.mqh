@@ -147,8 +147,8 @@ bool CStateStore::Read(string &content, string &err)
       return(false);
      }
 
-   const long size = FileSize(h);
-   if(size <= 0)
+   const ulong size = FileSize(h);
+   if(size == 0)
      {
       FileClose(h);
       err = "saved state is empty";

@@ -136,6 +136,14 @@ bool COrderManager::Send(MqlTradeRequest &req, const CConfig &cfg, SExecutionRes
       QmeLogMsg(QME_LOG_WARN, "Order", req.symbol + " rejected: " + res.comment);
       return(false);
      }
+
+   //--- unreachable while the loop above always returns; kept so every
+   //--- control path has a defined result
+   res.state = QME_EXEC_FAILED;
+   res.confirmed = false;
+   res.time = TimeCurrent();
+   res.comment = "order send exited without a result";
+   return(false);
   }
 
 #endif // __QME_EXECUTION_ORDERMANAGER_MQH__

@@ -20,7 +20,8 @@ class CHistoryValidator
   {
 public:
    //--- validate every provided context of one symbol; all must pass
-   static bool       ValidateSymbol(CTimeframeContext *ctxs[], const ENUM_TIMEFRAMES tfs[],
+   //--- (MQL5: arrays are reference-only and cannot be const or pointer-typed)
+   static bool       ValidateSymbol(CTimeframeContext &ctxs[], ENUM_TIMEFRAMES &tfs[],
                                     const int count, string &note);
 
    //--- compare just two contexts
@@ -31,22 +32,17 @@ public:
   };
 
 //------------------------------------------------------------------//
-bool CHistoryValidator::ValidateSymbol(CTimeframeContext *ctxs[], const ENUM_TIMEFRAMES tfs[],
+bool CHistoryValidator::ValidateSymbol(CTimeframeContext &ctxs[], ENUM_TIMEFRAMES &tfs[],
                                        const int count, string &note)
   {
    note = "";
-   if(count <= 0)
+   if(count <= 0 || count > ArraySize(ctxs) || count > ArraySize(tfs))
      {
       note = "no contexts";
       return(false);
      }
    for(int i = 0; i < count; i++)
      {
-      if(ctxs[i] == NULL)
-        {
-         note = "null context at " + IntegerToString(i);
-         return(false);
-        }
       if(!ctxs[i].DataValid())
         {
          note = ctxs[i].Symbol() + " " + QmeTimeframeName(tfs[i]) + " data invalid: " +
