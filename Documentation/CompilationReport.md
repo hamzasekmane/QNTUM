@@ -17,7 +17,7 @@ verification after the repair:
 
 ```
 $ python3 Tools/mql5check.py
-scanned 188 files (188 implemented, 0 empty)
+scanned 190 files (190 implemented, 0 empty)
 OK: no structural errors detected (this is NOT a compilation proof)
 
 $ python3 Tools/mql5fields.py
@@ -32,7 +32,7 @@ $ python3 Tools/mql5calls.py
 | Target | Status | Evidence |
 |---|---|---|
 | `QME_Main.mq5` MetaEditor compile (round 3) | **PASS** | user log 2026-11-10: `0 errors, 0 warnings, 115 ms elapsed` |
-| 20 test `.mq5` programs compile | **NOT TESTED** | same |
+| 21 test `.mq5` programs compile | **NOT TESTED** | same |
 | Static structure/member/arity checks | PASS (heuristics) | tool output above |
 | Runtime behaviour, DEMO, backtest | **NOT TESTED** | — |
 
@@ -65,6 +65,6 @@ User-compiled `QME_Main.mq5` in MetaEditor with the round-2 repairs:
 **`QME_Main.mq5` now compiles cleanly.** Progression: 101 errors /
 27 warnings → 2 / 1 → 0 / 0.
 
-Remaining compile targets: the 20 test programs under `Tests/` have not
+Remaining compile targets: the 21 test programs under `Tests/` have not
 been compiled yet. Runtime behaviour (DEMO, tester, backtest) remains
 NOT TESTED — a clean compile proves only that the code is valid MQL5.

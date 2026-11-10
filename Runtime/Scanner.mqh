@@ -393,6 +393,16 @@ bool CScanner::BuildAnalysis(CSymbolRuntime &rt, const int slot, const datetime 
      {
       a.bos = CBosEngine::Detect(*sr, a.structure, a.atr, scanBars);
       a.mss = CMssEngine::Detect(*sr, a.structure, a.atr, scanBars);
+      //--- keep the structure state's MSS record consistent with the event
+      a.structure.mssConfirmed = a.mss.valid;
+      a.structure.mssSide = (a.mss.event == QME_STRUCT_MSS_UP)   ? QME_SIDE_BUY
+                          : (a.mss.event == QME_STRUCT_MSS_DOWN) ? QME_SIDE_SELL
+                                                                 : QME_SIDE_NONE;
+      if(a.mss.valid)
+        {
+         a.structure.lastEvent = a.mss.event;
+         a.structure.lastEventTime = a.mss.time;
+        }
      }
    a.breakout = CBreakoutEngine::Detect(*sr, a.atr, 20, 2, 0.10);
 

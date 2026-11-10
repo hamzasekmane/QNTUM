@@ -24,6 +24,20 @@ int RunStructureTests(void)
    g_kit.Check(CMssEngine::IsConfirmed(st), "MSS flag honoured");
    g_kit.CheckEqual((long)st.mssSide, (long)QME_SIDE_BUY, "MSS side preserved");
 
+   //--- bearish confirmation is honoured the same way
+   SStructureState stDown;
+   QmeStructureReset(stDown);
+   stDown.mssConfirmed = true;
+   stDown.mssSide = QME_SIDE_SELL;
+   g_kit.Check(CMssEngine::IsConfirmed(stDown), "bearish MSS flag honoured");
+   g_kit.CheckEqual((long)stDown.mssSide, (long)QME_SIDE_SELL, "bearish MSS side preserved");
+
+   //--- a side without the flag is not a confirmation
+   SStructureState stSideOnly;
+   QmeStructureReset(stSideOnly);
+   stSideOnly.mssSide = QME_SIDE_BUY;
+   g_kit.Check(!CMssEngine::IsConfirmed(stSideOnly), "MSS side alone is not a confirmation");
+
    //--- a structure event with no break must not claim one
    SStructureEvent ev;
    QmeStructureEventClear(ev);

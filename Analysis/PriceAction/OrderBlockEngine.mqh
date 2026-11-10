@@ -36,13 +36,17 @@ int COrderBlockEngine::Detect(CBarSeries &series, const double atr, const double
                               const int lookback, const int maxOut,
                               SOrderBlockRecord &out[])
   {
-   ArrayResize(out, 0);
+   //--- caller-owned buffer, possibly a fixed-size struct member
+   //--- (SMarketAnalysis::orderBlocks): never ArrayResize it (see FvgEngine)
    if(!series.IsValid() || maxOut <= 0) return(0);
+   const int capacity = MathMin(maxOut, ArraySize(out));
+   if(capacity <= 0) return(0);
 
    const int limit = MathMin(scanBars, series.Count() - lookback - 1);
+   if(limit <= 0) return(0);
    int found = 0;
 
-   for(int i = 0; i < limit && found < maxOut; i++)
+   for(int i = 0; i < limit && found < capacity; i++)
      {
       ENUM_QME_SIDE side = QME_SIDE_NONE;
       if(!CDisplacementEngine::IsDisplacementBar(series, i, atr, avgBody,
@@ -74,18 +78,16 @@ int COrderBlockEngine::Detect(CBarSeries &series, const double atr, const double
               }
            }
 
-         const int n = ArraySize(out);
-         ArrayResize(out, n + 1);
-         out[n].time = c.time;
-         out[n].side = side;
-         out[n].upper = upper;
-         out[n].lower = lower;
-         out[n].mitigated = mitigated;
+         out[found].time = c.time;
+         out[found].side = side;
+         out[found].upper = upper;
+         out[found].lower = lower;
+         out[found].mitigated = mitigated;
          //--- strength: displacement size relative to average body
          SCandle disp;
          double dispBody = 0.0;
          if(series.Get(i, disp)) dispBody = QmeCandleBody(disp);
-         out[n].displacement = QmeClamp(dispBody / MathMax(avgBody, QME_EPSILON) / 3.0, 0.0, 1.0);
+         out[found].displacement = QmeClamp(dispBody / MathMax(avgBody, QME_EPSILON) / 3.0, 0.0, 1.0);
          found++;
          break;
         }

@@ -91,8 +91,13 @@ int RunRestartRecoveryTests(void)
    g_kit.CheckEqual(rep.positionsStale, 1, "phantom position detected against the broker");
    g_kit.CheckEqual(history2.Count(), 1, "signal history restored");
    g_kit.CheckEqual(dedup2.Count(), 1, "fingerprint restored");
-   g_kit.Check(!dedup2.IsDuplicate("fp-recovery", 900, TimeCurrent()),
-               "restored fingerprint respects its cooldown window");
+   //--- registered moments before the "restart": its remaining cooldown
+   //--- must still block (a restart must never free a just-fired signal),
+   //--- and it must free exactly when the ORIGINAL window ends
+   g_kit.Check(dedup2.IsDuplicate("fp-recovery", 900, TimeCurrent()),
+               "restored fingerprint stays blocked inside its remaining cooldown");
+   g_kit.Check(!dedup2.IsDuplicate("fp-recovery", 900, TimeCurrent() + 901),
+               "restored fingerprint frees when its original cooldown ends");
    g_kit.CheckEqual((long)memory2.Get("cycles"), 123, "runtime counter restored");
    g_kit.CheckClose(memory2.Get("recoveries"), 1.0, 1e-9, "incremented counter restored");
    string idemWhy = "";

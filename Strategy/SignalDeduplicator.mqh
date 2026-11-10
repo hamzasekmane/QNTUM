@@ -145,23 +145,48 @@ string CSignalDeduplicator::Serialize(void)
 bool CSignalDeduplicator::Deserialize(const string blob)
   {
    if(StringLen(blob) == 0) return(false);
-   Reset();
+
+   //--- parse into scratch first: a malformed document must never destroy
+   //--- the records already held, and malformed lines are rejected one by
+   //--- one instead of loading as time=0 entries that would block forever
+   string tmpFp[QME_MAX_FINGERPRINTS];
+   datetime tmpTime[QME_MAX_FINGERPRINTS];
+   ulong tmpId[QME_MAX_FINGERPRINTS];
+   int loaded = 0;
+
    string lines[];
    const int n = StringSplit(blob, '\n', lines);
-   int loaded = 0;
-   for(int i = 0; i < n && m_count < QME_MAX_FINGERPRINTS; i++)
+   for(int i = 0; i < n && loaded < QME_MAX_FINGERPRINTS; i++)
      {
       if(StringLen(lines[i]) == 0) continue;
       string f[];
-      if(StringSplit(lines[i], ';', f) < 4) continue;
+      if(StringSplit(lines[i], ';', f) < 4) continue;      // incomplete record
       if(f[0] != "fp") continue;
-      m_time[m_count] = (datetime)StringToInteger(f[1]);
-      m_signalId[m_count] = (ulong)StringToInteger(f[2]);
-      m_fp[m_count] = f[3];
-      m_count++;
+      const long t = StringToInteger(f[1]);
+      if(t <= 0) continue;                                 // no valid timestamp
+      string fp = f[3];
+      for(int k = 4; k < ArraySize(f); k++) fp += ";" + f[k];  // ';' inside fp
+      if(StringLen(fp) == 0) continue;
+      bool dup = false;
+      for(int k = 0; k < loaded; k++) if(tmpFp[k] == fp) { dup = true; break; }
+      if(dup) continue;
+      tmpTime[loaded] = (datetime)t;
+      tmpId[loaded] = (ulong)StringToInteger(f[2]);
+      tmpFp[loaded] = fp;
       loaded++;
      }
-   return(loaded > 0);
+
+   if(loaded <= 0) return(false);   // nothing valid: keep current state
+
+   Reset();
+   for(int i = 0; i < loaded; i++)
+     {
+      m_fp[i] = tmpFp[i];
+      m_time[i] = tmpTime[i];
+      m_signalId[i] = tmpId[i];
+     }
+   m_count = loaded;
+   return(true);
   }
 
 #endif // __QME_STRATEGY_SIGNALDEDUP_MQH__

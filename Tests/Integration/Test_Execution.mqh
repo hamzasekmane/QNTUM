@@ -101,12 +101,29 @@ int RunExecutionTests(void)
       g_kit.Check(v.reason == QME_REJ_DISABLED_BY_CONFIG, "analysisOnly yields the config reason");
      }
 
+   //--- precedence: with analysisOnly on, even a request that would fail
+   //--- several other checks must report the CONFIG reason, not a later one
+     {
+      MqlTradeRequest bad;
+      ZeroMemory(bad);
+      bad.symbol = _Symbol;
+      bad.volume = -1.0;      // also invalid volume
+      bad.sl = 0.0;           // also missing stop
+      bad.price = 0.0;        // also missing price
+      const SRequestValidation pv = CExecutionValidator::Local(bad, good, spec, cfg);
+      g_kit.Check(!pv.ok, "multi-fault request is refused in analysisOnly");
+      g_kit.Check(pv.reason == QME_REJ_DISABLED_BY_CONFIG,
+                  "config reason outranks simultaneous faults");
+     }
+
    //--- inverted stop is refused locally
    STradePlan inverted = ExecPlan(spec, QME_SIDE_BUY);
    inverted.stopLoss = 1.10100;            // above entry for a buy
    MqlTradeRequest req2;
    string why2 = "";
-   g_kit.Check(!CTradeRequestBuilder::Build(req2, inverted, spec, spec.fillingMask, 20, "QME", why2),
+   g_kit.Check(!CTradeRequestBuilder::Build(req2, inverted, spec,
+                                            CBrokerCapabilities::ChooseFilling(spec, ORDER_TYPE_BUY),
+                                            20, "QME", why2),
                "builder refuses an inverted buy stop");
 
    //--- idempotency: an intent can be claimed once, not twice

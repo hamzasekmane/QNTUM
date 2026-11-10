@@ -73,15 +73,51 @@ int RunZoneTests(void)
    MakeZone(z1, QME_SIDE_BUY, 1.1000, 1.1020, 0.6, now);
    MakeZone(z2, QME_SIDE_BUY, 1.1010, 1.1030, 0.9, now);
    board.AddOrMerge(z1, 60.0);
-   board.AddOrMerge(z2, 60.0);
+   //--- z1/z2 share 0.0010 of their 0.0020 height = 50% of the smaller
+   //--- zone, which is the documented merge metric: at a 40% threshold
+   //--- they must merge; a 60% threshold must refuse them (see below)
+   board.AddOrMerge(z2, 40.0);
    g_kit.CheckEqual(board.Count(), 1, "overlapping same-side zones merge");
    g_kit.Check(board.MergedCount() >= 1, "merge counter incremented");
 
    //--- opposite side never merges
    STradingZone z3;
    MakeZone(z3, QME_SIDE_SELL, 1.1000, 1.1020, 0.5, now);
-   board.AddOrMerge(z3, 60.0);
+   board.AddOrMerge(z3, 40.0);
    g_kit.CheckEqual(board.Count(), 2, "opposite-side zone is kept separate");
+
+   //--- the tolerance gate is real: same geometry at a 60% threshold
+   CZoneBoard strict;
+   strict.Init("EURUSD");
+   STradingZone s1, s2;
+   MakeZone(s1, QME_SIDE_BUY, 1.1000, 1.1020, 0.6, now);
+   MakeZone(s2, QME_SIDE_BUY, 1.1010, 1.1030, 0.9, now);
+   strict.AddOrMerge(s1, 60.0);
+   strict.AddOrMerge(s2, 60.0);
+   g_kit.CheckEqual(strict.Count(), 2, "50% overlap stays separate at a 60% threshold");
+   g_kit.CheckEqual(strict.MergedCount(), 0, "no merge counted below the threshold");
+
+   //--- containment merges and keeps the outer boundary
+   CZoneBoard cont;
+   cont.Init("EURUSD");
+   STradingZone outer, inner;
+   MakeZone(outer, QME_SIDE_BUY, 1.1000, 1.1040, 0.6, now);
+   MakeZone(inner, QME_SIDE_BUY, 1.1010, 1.1020, 0.9, now);
+   cont.AddOrMerge(outer, 60.0);
+   cont.AddOrMerge(inner, 60.0);
+   g_kit.CheckEqual(cont.Count(), 1, "a contained zone merges into its container");
+   STradingZone mergedZone;
+   g_kit.Check(cont.At(0, mergedZone) && mergedZone.lower == 1.1000 && mergedZone.upper == 1.1040,
+               "merged boundary is deterministic (the outer envelope)");
+
+   //--- re-adding the identical zone refreshes it instead of duplicating
+   CZoneBoard dupe;
+   dupe.Init("EURUSD");
+   STradingZone d1;
+   MakeZone(d1, QME_SIDE_BUY, 1.1000, 1.1020, 0.6, now);
+   dupe.AddOrMerge(d1, 60.0);
+   dupe.AddOrMerge(d1, 60.0);
+   g_kit.CheckEqual(dupe.Count(), 1, "repeated insertion of the same zone does not duplicate");
 
    //--- ranking prefers strength
    STradingZone weak, strong;

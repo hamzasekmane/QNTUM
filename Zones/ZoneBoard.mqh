@@ -120,6 +120,7 @@ bool CZoneBoard::AddOrMerge(const STradingZone &z, const double mergePct)
 
       m_zones[i].upper = MathMax(m_zones[i].upper, z.upper);
       m_zones[i].lower = MathMin(m_zones[i].lower, z.lower);
+      m_zones[i].merged = true;
       m_zones[i].strength = QmeClamp(MathMax(m_zones[i].strength, z.strength) + 0.05, 0.0, 1.0);
       m_zones[i].confidence = QmeClamp(MathMax(m_zones[i].confidence, z.confidence) + 0.08, 0.0, 1.0);
       m_zones[i].factorMask |= z.factorMask;

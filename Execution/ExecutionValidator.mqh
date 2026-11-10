@@ -46,6 +46,12 @@ SRequestValidation CExecutionValidator::Local(const MqlTradeRequest &req, const 
    v.reason = QME_REJ_NONE;
    v.comment = "";
 
+   //--- analysis-only is a HARD config block: it outranks every market or
+   //--- geometry refusal, so the reported reason always names the real
+   //--- restriction even when the request would also fail other checks
+   if(cfg.In.analysisOnly)
+     { v.reason = QME_REJ_DISABLED_BY_CONFIG; v.comment = "analysisOnly"; return(v); }
+
    if(StringLen(req.symbol) == 0) { v.reason = QME_REJ_INTERNAL; v.comment = "no symbol"; return(v); }
    if(req.volume <= 0.0) { v.reason = QME_REJ_VOLUME_INVALID; v.comment = "volume <= 0"; return(v); }
    if(!CSymbolSpecifications::VolumeInRange(spec, req.volume))
@@ -103,10 +109,6 @@ SRequestValidation CExecutionValidator::Local(const MqlTradeRequest &req, const 
            { v.reason = QME_REJ_BROKER_REJECTED; v.comment = "IOC not supported"; return(v); }
         }
      }
-
-   //--- simulation mode is enforced here too (defence in depth)
-   if(cfg.In.analysisOnly)
-     { v.reason = QME_REJ_DISABLED_BY_CONFIG; v.comment = "analysisOnly"; return(v); }
 
    v.ok = true;
    return(v);

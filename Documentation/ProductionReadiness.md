@@ -4,7 +4,7 @@
 
 | Gate | Status | Evidence / blocker |
 |---|---|---|
-| Source completeness (all layers implemented) | PASS | 188 files, 0 empty (mql5check) |
+| Source completeness (all layers implemented) | PASS | 190 files, 0 empty (mql5check) |
 | Static structure/member/arity checks | PASS (heuristic) | Tools output in CompilationReport.md |
 | MetaEditor compilation, `QME_Main.mq5` | **PASS** | round 3, 2026-11-10: 0 errors, 0 warnings (115 ms) |
 | Test programs compile (20) | **NOT TESTED** | same log |
@@ -25,7 +25,7 @@
 
 ## Remaining blockers, in order
 
-1. MetaEditor compilation of the 20 test programs (main EA: done, 0/0).
+1. MetaEditor compilation of the 21 test programs (main EA: done, 0/0).
 2. Fix whatever those logs expose.
 3. Execute test suites in the Strategy Tester / on DEMO; record output.
 4. DEMO forward validation of execution, reconciliation, recovery.
