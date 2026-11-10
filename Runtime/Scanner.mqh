@@ -414,8 +414,9 @@ bool CScanner::BuildAnalysis(CSymbolRuntime &rt, const int slot, const datetime 
    a.pattern = CCandlePatternEngine::Detect(*sr, 0, rt.tuning.displacementMult);
    a.displacement = CDisplacementEngine::Latest(*sr, a.atr, a.avgBody, scanBars,
                                                 rt.tuning.displacementMult);
-   a.location = CLocationEngine::Evaluate(a.price, a.atr, 0.5);
    a.range = CPremiumDiscountEngine::FromStructure(a.structure, a.price, 0.10);
+   a.location = CLocationEngine::Evaluate(a.price, a.atr, a.range,
+                                          a.liquidity.map, 0.5);
 
    //--- reaction at the nearest liquidity level on either side
    SLiquidityLevel lvl;

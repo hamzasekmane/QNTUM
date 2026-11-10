@@ -82,14 +82,18 @@ the symbol). A run with skips is inconclusive for those items.
 cd QNTUM
 python3 Tools/mql5check.py          # structural check, 188 files
 python3 Tools/mql5fields.py         # member/field access heuristic
+python3 Tools/mql5calls.py          # call-arity heuristic (static + instance calls)
 ```
 
 `mql5check.py` checks include guards, balance, duplicate types, unknown
 identifiers and misplaced `input` declarations. `mql5fields.py` resolves every
-`variable.member` access against the declared type (including base classes and
-array members) and reports accesses the type does not have — the class of typo a
-compiler would catch, catching what it can before MetaEditor is available.
-Neither tool is a compiler.
+`variable.member` access against the declared type (including base classes,
+array members and one level of field chains such as `cfg.In.x`) and reports
+accesses the type does not have. `mql5calls.py` counts the arguments of every
+static and instance method call and compares them with the declared parameter
+range (defaults included). These are the classes of typo a compiler would
+catch, caught as far as static text analysis can before MetaEditor is
+available. None of the three tools is a compiler.
 
 Current result:
 

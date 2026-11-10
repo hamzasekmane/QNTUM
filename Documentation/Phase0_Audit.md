@@ -189,14 +189,21 @@ OK: no structural errors detected (this is NOT a compilation proof)
 
 $ python3 Tools/mql5fields.py
 -- 0 suspicious member access(es); this is a heuristic, not a compiler
+
+$ python3 Tools/mql5calls.py
+-- 0 arity mismatch(es); this is a heuristic, not a compiler
 ```
 
 `mql5check.py` validates include guards, brace/parenthesis balance, duplicate
 type declarations, unknown identifiers, misplaced `input` declarations and empty
 files. `mql5fields.py` resolves each `variable.member` access against the
-declared type, including base classes, and reports members the type does not
-declare; it found four genuine mismatches during development, all fixed. Both are
-static heuristics — neither is a compiler.
+declared type, including base classes and one level of field chain, and reports
+members the type does not declare. `mql5calls.py` compares every static and
+instance call's argument count with the declared parameter range. Between them
+they found nine genuine mismatches during development (nonexistent members,
+a wrong filling-mode source, a missing data-quality argument, a three-argument
+call to a five-parameter function), all fixed. All three are static heuristics
+— none is a compiler.
 
 ### Verification NOT performed (and why)
 
