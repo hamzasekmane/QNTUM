@@ -164,7 +164,7 @@ Interfaces defined before bodies; each file compilable at the end of the phase.
 ## 8. Delivery status against this plan (as implemented)
 
 The plan above was executed in order. Final tree: **184 MQL5 source files, all
-non-empty, 25k+ lines**, plus 9 reports in `Documentation/`.
+non-empty, 25k+ lines**, plus 10 reports in `Documentation/`.
 
 | Phase | Scope | Status |
 |---|---|---|
