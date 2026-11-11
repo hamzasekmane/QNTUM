@@ -57,6 +57,7 @@
 
 //--- 4. analysis ---------------------------------------------------
 #include "Analysis/FactorCatalog.mqh"
+#include "Analysis/Liquidity/LiquidityOutcome.mqh"
 
 //--- 5. zones ------------------------------------------------------
 #include "Zones/ZoneTypes.mqh"

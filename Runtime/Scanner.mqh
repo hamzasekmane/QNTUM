@@ -23,6 +23,7 @@
 #include "../Data/MarketClock.mqh"
 #include "../Data/SymbolProfile.mqh"
 #include "../Analysis/FactorCatalog.mqh"
+#include "../Analysis/Liquidity/LiquidityOutcome.mqh"
 #include "../Zones/ZoneEngine.mqh"
 
 #define QME_TF_SLOTS 5
@@ -440,6 +441,54 @@ bool CScanner::BuildAnalysis(CSymbolRuntime &rt, const int slot, const datetime 
      {
       a.sweep = CLiquiditySweep::Best(*sr, a.liquidity.map.levels, a.liquidity.map.count,
                                       a.atr, scanBars, 0.15);
+      if(a.sweep.valid)
+        {
+         // Tie the raid to a subsequent closed-bar structure break; stale or
+         // unconfirmed raids remain WAIT and cannot score as reversal setups.
+         const double opposite = (a.sweep.levelSide == QME_SIDE_BUY) ?
+                                 a.structure.lastSwingLow : a.structure.lastSwingHigh;
+         const SLiquidityOutcome outcome = CLiquidityOutcome::ConfirmSweep(
+            *sr, a.sweep, opposite, 4, QME_PRICE_EPS);
+         if(outcome.classification == QME_LIQUIDITY_SWEEP)
+           {
+            a.liquidityOutcome = outcome;
+            a.liquidityEventSide = a.sweep.tradeSide;
+           }
+         else
+            QmeSweepClear(a.sweep);
+
+         // Identify accepted continuation breaks on mapped pools. Use only
+         // closed bars, requiring two subsequent closes to remain outside.
+         const int nBars = (int)MathMin(8, sr.Count());
+         if(nBars >= 3)
+           {
+            SLiquidityBar closed[];
+            ArrayResize(closed,nBars);
+            for(int b=0; b<nBars; b++)
+              {
+               const int shift=nBars-1-b;
+               closed[b].high=sr.High(shift);
+               closed[b].low=sr.Low(shift);
+               closed[b].close=sr.Close(shift);
+              }
+            double acceptedDistance=DBL_MAX;
+            for(int li=0; li<a.liquidity.map.count; li++)
+              {
+               const SLiquidityLevel level=a.liquidity.map.levels[li];
+               const SLiquidityOutcome accepted=CLiquidityOutcome::Classify(
+                  closed,nBars,level.price,level.side,0.0,2,
+                  MathMax(a.liquidity.map.equalHighTolerance,QME_PRICE_EPS));
+               const double d=MathAbs(sr.Close(0)-level.price);
+               if(a.liquidityOutcome.classification!=QME_LIQUIDITY_SWEEP &&
+                  accepted.classification==QME_LIQUIDITY_BREAKOUT && d<acceptedDistance)
+                 {
+                  acceptedDistance=d;
+                  a.liquidityOutcome=accepted;
+                  a.liquidityEventSide=level.side;
+                 }
+              }
+           }
+        }
      }
    CVolumeProfile::Build(*sr, (int)MathMin(sr.Count(), 200), 24, a.volumeProfile);
 

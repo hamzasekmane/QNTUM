@@ -243,14 +243,67 @@ int CCandidateCollector::Collect(const SMarketAnalysis &bias, const SMarketAnaly
       if(side == QME_SIDE_BUY && !cfg.In.allowBuy)  continue;
       if(side == QME_SIDE_SELL && !cfg.In.allowSell) continue;
 
+      // Do not trade a liquidity raid merely because its wick closed back
+      // inside the pool. Require a later closed-bar MSS/CHoCH in the reversal
+      // direction. Series index 0 is newest, so a smaller index is later.
+      if(setup.liquidityOutcome.classification == QME_LIQUIDITY_BREAKOUT)
+        {
+         const bool bosAligned = setup.bos.valid &&
+            ((side == QME_SIDE_BUY && setup.bos.event == QME_STRUCT_BOS_UP) ||
+             (side == QME_SIDE_SELL && setup.bos.event == QME_STRUCT_BOS_DOWN));
+         if(side != setup.liquidityEventSide || !bosAligned) continue;
+        }
+      if(setup.sweep.valid && setup.sweep.tradeSide == side)
+        {
+         const bool mssAligned = setup.mss.valid &&
+            ((side == QME_SIDE_BUY && setup.mss.event == QME_STRUCT_MSS_UP) ||
+             (side == QME_SIDE_SELL && setup.mss.event == QME_STRUCT_MSS_DOWN));
+         if(!mssAligned || setup.mss.barIndex < 0 ||
+            setup.sweep.barIndex < 0 || setup.mss.barIndex >= setup.sweep.barIndex)
+            continue;
+        }
+
       STradingZone zone;
       if(!zones.BestZone(side, price, atr, setup.barTime, 2.0, zone))
          continue;
 
       SEntrySpec entry = CEntryRig::FromZone(zone, side, price, atr, point, spec,
-                                             rrTarget, maxStopAtr);
+                                             MathMax(rrTarget, 2.0), maxStopAtr);
       if(!entry.valid)
          continue;
+
+      // Reversal geometry is anchored to the confirmed raid wick. The first
+      // opposite-side liquidity pool is the target; if it cannot pay 2R,
+      // reject instead of silently targeting an arbitrary RR multiple.
+      if(setup.sweep.valid && setup.sweep.tradeSide == side)
+        {
+         const double buffer = MathMax(0.10 * atr, 2.0 * point);
+         entry.stop = (side == QME_SIDE_SELL) ? setup.sweep.extreme + buffer :
+                                                setup.sweep.extreme - buffer;
+         entry.stop = CSymbolSpecifications::NormalizePrice(spec, entry.stop);
+         entry.stopDistance = MathAbs(entry.entry - entry.stop);
+         if(entry.stopDistance <= 0.0 ||
+            (maxStopAtr > 0.0 && entry.stopDistance > maxStopAtr * atr)) continue;
+         double nearest = 0.0;
+         double nearestDistance = DBL_MAX;
+         for(int li=0; li<setup.liquidity.map.count; li++)
+           {
+            const SLiquidityLevel level = setup.liquidity.map.levels[li];
+            const bool targetSide = (side == QME_SIDE_BUY) ? level.side == QME_SIDE_BUY :
+                                                              level.side == QME_SIDE_SELL;
+            const bool ahead = (side == QME_SIDE_BUY) ? level.price > entry.entry :
+                                                        level.price < entry.entry;
+            if(!targetSide || !ahead) continue;
+            const double d=MathAbs(level.price-entry.entry);
+            if(d < nearestDistance) { nearestDistance=d; nearest=level.price; }
+           }
+         if(nearest <= 0.0) continue;
+         entry.target1 = CSymbolSpecifications::NormalizePrice(spec, nearest);
+         entry.target2 = entry.target1;
+         entry.rr = MathAbs(entry.target1-entry.entry)/entry.stopDistance;
+         if(entry.rr + QME_EPSILON < 2.0) continue;
+        }
+      if(entry.rr + QME_EPSILON < 2.0) continue;
       string why = "";
       if(!CEntryTypes::Validate(entry, spec,
                                 CSymbolSpecifications::MinStopDistance(spec), why))
