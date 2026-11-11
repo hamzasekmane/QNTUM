@@ -18,8 +18,8 @@ close, and it refuses to widen a stop.
 | 3 | `CTradeRequestBuilder::Build` | `INTERNAL` (illegal geometry) |
 | 4 | `CExecutionValidator::Full` (local + `OrderCheck`) | mapped reason |
 | 5 | `CIdempotencyGuard::Begin` | `DUPLICATE_SIGNAL` |
-| 6 | `COrderManager::Send` | retcode → reason |
-| 7 | `CPositionReconciler` if ambiguous | `EXECUTION_FAILED` / reconciled |
+| 6 | Save the in-flight state before `COrderManager::Send` | no send on checkpoint failure |
+| 7 | On ambiguous response keep intent in flight and fault controller | operator reconciliation required |
 | 8 | Journal + monitor | — |
 
 `OrderCheck` is used deliberately: it asks the server whether the request would
@@ -34,6 +34,10 @@ be accepted **without sending it**.
 * `sl` and `tp` are mandatory and validated for side;
 * `type_filling` comes from the symbol's reported mask;
 * `magic` and comment identify the engine.
+* Before sending, the current request price is rechecked for minimum RR and
+  `OrderCalcProfit` estimates loss at SL in account currency against the equity
+  budget. It excludes slippage, gaps, commissions and financing, and is untested
+  on the target brokers; it does not guarantee a maximum realized loss.
 
 ## 4. Retry policy
 
@@ -51,16 +55,19 @@ exists.
 ## 5. Idempotency
 
 Per fingerprint: `NONE → IN_FLIGHT → EXECUTED | FAILED`. Only `NONE` and
-`FAILED` may execute. The table is persisted, so a restart cannot re-fire an
-intent that already executed. When the table is full and holds no `FAILED`
-record, the guard refuses rather than evicting live state.
+`FAILED` may execute. A checkpoint is attempted before send and a successful
+send is checkpointed again; a recovered in-flight record faults the controller.
+The checkpoint is currently shared between accounts and instances and has not
+been platform- or crash-tested, so persistence is not a production guarantee.
+When the table is full and holds no `FAILED` record, the guard refuses.
 
 ## 6. Ambiguity
 
-A `TIMEOUT` means *unknown*, not *failed*. The gateway calls
-`CPositionReconciler::FindPosition(symbol, magic)`. If a position exists it is
-adopted as `QME_EXEC_RECONCILED`; if not, the intent stays `UNKNOWN_STATE`,
-which blocks a re-send pending operator attention.
+A `TIMEOUT`, connection error or send with no server answer means *unknown*.
+The gateway retains the in-flight claim and the controller faults; a position
+matching only symbol and magic is not proof of this order's execution. An
+operator must reconcile the request, orders, deals and positions before any
+restart/recovery procedure. There is no automated resolution workflow yet.
 
 ## 7. Protective stop maintenance
 

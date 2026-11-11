@@ -92,8 +92,8 @@ SWatchdogVerdict CSystemWatchdog::Evaluate(const datetime now, const datetime la
       return(v);
      }
 
-   v.cycleAgeSec = (lastCycle > 0 && now > lastCycle) ? (int)(now - lastCycle) : 999999;
-   v.dataAgeSec = (lastData > 0 && now > lastData) ? (int)(now - lastData) : 999999;
+   v.cycleAgeSec = (lastCycle > 0 && now >= lastCycle) ? (int)(now - lastCycle) : 999999;
+   v.dataAgeSec = (lastData > 0 && now >= lastData) ? (int)(now - lastData) : 999999;
 
    //--- a dead cycle is a fault: nothing is being evaluated any more
    if(v.cycleAgeSec > m_cycleTimeoutSec * 3)

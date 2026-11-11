@@ -26,6 +26,8 @@ private:
    static void       ApplyResult(const MqlTradeResult &r, SExecutionResult &res);
 
 public:
+   static bool       IsUnresolvedAcceptance(const uint retcode)
+                     { return(retcode == TRADE_RETCODE_PLACED || retcode == TRADE_RETCODE_DONE_PARTIAL); }
    static bool       Send(MqlTradeRequest &req, const CConfig &cfg, SExecutionResult &res);
   };
 
@@ -53,6 +55,7 @@ bool COrderManager::Send(MqlTradeRequest &req, const CConfig &cfg, SExecutionRes
       MqlTradeResult tr;
       ZeroMemory(tr);
 
+      ResetLastError();
       const ulong t0 = GetMicrosecondCount();
       const bool sent = OrderSend(req, tr);
       const double latencyMs = (double)(GetMicrosecondCount() - t0) / 1000.0;
@@ -63,16 +66,28 @@ bool COrderManager::Send(MqlTradeRequest &req, const CConfig &cfg, SExecutionRes
 
       if(!sent && tr.retcode == 0)
         {
-         //--- the terminal refused locally: no server answer
+         //--- No server answer: conservatively retain the claim. Do not
+         //--- assume a local error proves the broker never saw the request.
          res.confirmed = false;
-         res.state = QME_EXEC_FAILED;
-         res.reject = QmeRejectFromRetcode((uint)res.lastError);
-         res.comment = "OrderSend failed locally: " + QmeLastErrorText();
+         res.state = QME_EXEC_UNKNOWN_STATE;
+         res.reject = QME_REJ_EXECUTION_FAILED;
+         res.comment = "OrderSend returned no server answer: " + QmeLastErrorText();
          QmeLogMsg(QME_LOG_ERROR, "Order", res.comment);
          return(false);
         }
 
-      if(QmeRetcodeIsSuccess(tr.retcode))
+      // PLACED or partial fills may leave an active order or residual risk.
+      // Keep the intent unresolved and require broker reconciliation.
+      if(IsUnresolvedAcceptance(tr.retcode))
+        {
+         res.confirmed = false;
+         res.state = QME_EXEC_UNKNOWN_STATE;
+         res.reject = QME_REJ_EXECUTION_FAILED;
+         res.time = TimeCurrent();
+         res.comment = "placed or partially filled order: operator reconciliation required";
+         return(false);
+        }
+      if(tr.retcode == TRADE_RETCODE_DONE)
         {
          res.confirmed = true;
          res.state = QME_EXEC_CONFIRMED;
@@ -80,24 +95,33 @@ bool COrderManager::Send(MqlTradeRequest &req, const CConfig &cfg, SExecutionRes
          res.time = TimeCurrent();
          res.filledPrice = (tr.price > 0.0) ? tr.price : req.price;
 
-         //--- resolve the resulting position when the broker reports one
-         if(tr.order > 0 && req.action == TRADE_ACTION_DEAL)
+         // An arbitrary same-symbol position is not proof of this fill on
+         // hedging accounts. Match the broker's deal position identifier.
+         ulong positionId = 0;
+         if(tr.deal > 0 && HistoryDealSelect(tr.deal))
+            positionId = (ulong)HistoryDealGetInteger(tr.deal, DEAL_POSITION_ID);
+         ulong matched = 0;
+         int matches = 0;
+         for(int i = 0; positionId > 0 && i < PositionsTotal(); i++)
            {
-            ulong tk = 0;
-            double vol = 0.0, open = 0.0, sl = 0.0, tp = 0.0;
-            if(CPositionReconciler::FindPosition(req.symbol, req.magic, tk, vol, open, sl, tp))
-              {
-               res.positionTicket = tk;
-               if(open > 0.0) res.filledPrice = open;
-               if(vol > 0.0) res.filledVolume = vol;
-               if(sl <= 0.0)
-                 {
-                  //--- a filled position without a stop is a critical failure
-                  QmeLogMsg(QME_LOG_ERROR, "Order", "confirmed position " +
-                            IntegerToString((long)tk) + " has no stop loss");
-                 }
-              }
+            const ulong tk = PositionGetTicket(i);
+            if(tk == 0 || !PositionSelectByTicket(tk)) continue;
+            if((ulong)PositionGetInteger(POSITION_IDENTIFIER) != positionId) continue;
+            if(PositionGetString(POSITION_SYMBOL) != req.symbol) continue;
+            if((ulong)PositionGetInteger(POSITION_MAGIC) != req.magic) continue;
+            matched = tk;
+            matches++;
            }
+         if(matches != 1 || !PositionSelectByTicket(matched) ||
+            PositionGetDouble(POSITION_SL) <= 0.0)
+           {
+            res.confirmed = false;
+            res.state = QME_EXEC_UNKNOWN_STATE;
+            res.reject = QME_REJ_EXECUTION_FAILED;
+            res.comment = "filled deal has no uniquely identified protected position; operator reconciliation required";
+            return(false);
+           }
+         res.positionTicket = matched;
 
          QmeLogMsg(QME_LOG_INFO, "Order", req.symbol + " filled/placed, retcode " +
                    IntegerToString((int)tr.retcode) + " latency " +

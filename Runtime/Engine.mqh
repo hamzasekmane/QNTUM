@@ -67,6 +67,7 @@ private:
    CConfig            m_cfg;
    bool               m_ready;
    bool               m_inCycle;
+   bool               m_recoveryBlocked;
    string             m_error;
 
    CAccountContext    m_account;
@@ -109,6 +110,7 @@ private:
    long               m_rejections;
    int                m_signalsToday;   // generated since m_signalDay (server day)
    datetime           m_signalDay;
+   datetime           m_lastCycle;
 
    bool               ApplySignalState(const ulong id, const ENUM_QME_SIGNAL_STATE to,
                                        const ENUM_QME_REJECT reason, const string note);
@@ -122,7 +124,7 @@ private:
    void               CloseOppositePositions(const STradePlan &plan);
    void               AttachTickets(const ulong id, const SExecutionResult &res);
    void               RestoreState(void);
-   void               TrackingAfterExecution(const STradePlan &plan, const SExecutionResult &res);
+   bool               TrackingAfterExecution(const STradePlan &plan, const SExecutionResult &res);
 
 public:
                      CEngine(void);
@@ -150,6 +152,8 @@ public:
    CReplayEngine*    Replay(void) { return(&m_replay); }
    CEventLedger*     Ledger(void) { return(&m_ledger); }
    CExecutionStatistics* ExecStats(void) { return(&m_execStats); }
+   datetime          LastCycle(void) { return(m_lastCycle); }
+   datetime          LastCheckpoint(void) { return(m_checkpoint.LastSave()); }
    long              Cycles(void) { return(m_cycles); }
    long              Trades(void) { return(m_trades); }
    long              Errors(void) { return(m_errors); }
@@ -161,6 +165,7 @@ CEngine::CEngine(void)
   {
    m_ready = false;
    m_inCycle = false;
+   m_recoveryBlocked = false;
    m_error = "";
    m_cycles = 0;
    m_signalsTotal = 0;
@@ -169,6 +174,7 @@ CEngine::CEngine(void)
    m_rejections = 0;
    m_signalsToday = 0;
    m_signalDay = 0;
+   m_lastCycle = 0;
   }
 
 //------------------------------------------------------------------//
@@ -247,11 +253,21 @@ bool CEngine::Init(const SInputs &in, string &err)
    m_replay.Init(512);
    m_funnel.Reset();
    m_profiler.Init(m_cfg.In.profileCycles);
+   m_gateway.AttachPersistence(&m_checkpoint, &m_positions, &m_history, &m_dedup, &m_memory);
    RestoreState();
 
    //--- runtime mode
    m_controller.Init(m_cfg, m_account.Snapshot());
+   // Restore may contain an older streak than the broker's history.
+   if(m_controller.IsLive() && m_cfg.In.maxConsecutiveLosses > 0 &&
+      !m_account.State().SyncFromHistory(m_cfg.In.magic, TimeCurrent()))
+      m_controller.Fault("cannot synchronize broker loss history");
+   if(m_recoveryBlocked)
+      m_controller.Fault("saved state could not be recovered; operator action required");
+   else if(m_gateway.Idempotency().InFlightCount() > 0)
+      m_controller.Fault("unresolved saved order intent; operator reconciliation required");
 
+   m_lastCycle = TimeCurrent();  // startup grace until the first successful cycle
    m_ready = true;
    const SAccountContext acc0 = m_account.Snapshot();
    QmeLogMsg(QME_LOG_INFO, "Engine", "initialised on account " +
@@ -270,7 +286,7 @@ void CEngine::Deinit(const string reason)
    m_shutdown.SetCounters(m_cycles, m_signalsTotal, m_trades, m_errors);
 
    //--- 1. final checkpoint before anything is released
-   if(m_cfg.In.persistState)
+   if(m_ready && m_cfg.In.persistState && !m_recoveryBlocked)
      {
       string err = "";
       string payload = CStateRecovery::Compose(*m_account.State(), m_positions, m_history,
@@ -313,7 +329,13 @@ void CEngine::RestoreState(void)
    string payload = "";
    if(!m_checkpoint.Load(payload, err))
      {
-      QmeLogMsg(QME_LOG_INFO, "Engine", "starting clean: " + err);
+      if(m_checkpoint.Store().Exists())
+        {
+         m_recoveryBlocked = true;
+         QmeLogMsg(QME_LOG_ERROR, "Engine", "saved state unreadable; preserving file: " + err);
+        }
+      else
+         QmeLogMsg(QME_LOG_INFO, "Engine", "starting clean: " + err);
       return;
      }
 
@@ -321,7 +343,12 @@ void CEngine::RestoreState(void)
                                                      m_history, m_dedup,
                                                      *m_gateway.Idempotency(), m_memory,
                                                      m_cfg.In.magic);
-   if(!rep.loaded) return;
+   if(!rep.loaded)
+     {
+      m_recoveryBlocked = true;
+      QmeLogMsg(QME_LOG_ERROR, "Engine", "saved state invalid; preserving file: " + rep.note);
+      return;
+     }
 
    //--- reconcile restored positions against the broker again
    const int stale = m_positions.ReconcileWithBroker(m_cfg.In.magic);
@@ -336,7 +363,7 @@ void CEngine::RestoreState(void)
 //------------------------------------------------------------------//
 void CEngine::SaveCheckpoint(const datetime now)
   {
-   if(!m_checkpoint.Due(now)) return;
+   if(m_recoveryBlocked || !m_checkpoint.Due(now)) return;
    string err = "";
    const string payload = CStateRecovery::Compose(*m_account.State(), m_positions, m_history,
                                                   m_dedup, *m_gateway.Idempotency(), m_memory);
@@ -345,6 +372,7 @@ void CEngine::SaveCheckpoint(const datetime now)
    else
      {
       m_errors++;
+      m_controller.Fault("checkpoint failed: " + err);
       QmeLogMsg(QME_LOG_WARN, "Engine", "checkpoint failed: " + err);
      }
   }
@@ -424,11 +452,15 @@ void CEngine::MaintainSignals(void)
      {
       STradingSignal sig;
       if(!m_registry.At(i, sig)) continue;
-      if(sig.state != QME_SIG_EXECUTED) continue;
+      if(sig.state != QME_SIG_EXECUTED && sig.state != QME_SIG_MONITORING) continue;
       if(sig.positionTicket == 0) continue;
-      if(!PositionSelectByTicket(sig.positionTicket)) continue;
-      ApplySignalState(sig.id, QME_SIG_MONITORING, QME_REJ_NONE,
-                       "position " + IntegerToString((long)sig.positionTicket) + " under management");
+      STrackedPosition tracked;
+      if(!m_positions.Read(sig.positionTicket, tracked)) continue;
+      if(tracked.closed)
+         ApplySignalState(sig.id, QME_SIG_CLOSED, QME_REJ_NONE, "tracked position closed at broker");
+      else if(sig.state == QME_SIG_EXECUTED && PositionSelectByTicket(sig.positionTicket))
+         ApplySignalState(sig.id, QME_SIG_MONITORING, QME_REJ_NONE,
+                          "position " + IntegerToString((long)sig.positionTicket) + " under management");
      }
 
    //--- keep the registry small: terminal records older than a day are history
@@ -581,9 +613,9 @@ void CEngine::RecordDecision(const SDecision &d, const long cycle)
   }
 
 //------------------------------------------------------------------//
-void CEngine::TrackingAfterExecution(const STradePlan &plan, const SExecutionResult &res)
+bool CEngine::TrackingAfterExecution(const STradePlan &plan, const SExecutionResult &res)
   {
-   if(!res.confirmed) return;
+   if(!res.confirmed || res.positionTicket == 0) return(false);
    STrackedPosition p;
    p.ticket = res.positionTicket;
    p.symbol = plan.symbol;
@@ -595,7 +627,7 @@ void CEngine::TrackingAfterExecution(const STradePlan &plan, const SExecutionRes
    p.signalId = plan.signalId;
    p.opened = TimeCurrent();
    p.closed = false;
-   if(p.ticket > 0) m_positions.Track(p);
+   return(m_positions.Track(p));
   }
 
 //------------------------------------------------------------------//
@@ -607,20 +639,43 @@ bool CEngine::HandleExecution(const SDecision &d, CSymbolRuntime &rt)
      {
       m_execStats.RecordReject(d.plan.symbol);
       m_errors++;
-      ApplySignalState(d.signalId, QME_SIG_EXECUTION_FAILED, res.reject,
-                       StringLen(res.comment) > 0 ? res.comment : "execution failed");
+      if(res.state == QME_EXEC_UNKNOWN_STATE || StringFind(res.comment, "pre-send checkpoint failed:") == 0)
+         m_controller.Fault(res.comment);
+      // An unknown broker outcome is not a confirmed failure; keep the
+      // signal pending until an operator reconciles the held intent.
+      if(res.sent)
+         ApplySignalState(d.signalId, QME_SIG_EXECUTION_PENDING, QME_REJ_NONE, "sent to broker");
+      if(res.state != QME_EXEC_UNKNOWN_STATE)
+         ApplySignalState(d.signalId, res.sent ? QME_SIG_EXECUTION_FAILED : QME_SIG_REJECTED,
+                          res.reject, StringLen(res.comment) > 0 ? res.comment : "execution failed");
       return(false);
      }
 
    m_trades++;
    m_execStats.RecordFill(d.plan.symbol, res.filledVolume > 0.0 ? res.filledVolume : d.plan.volume);
-   TrackingAfterExecution(d.plan, res);
+   const bool tracked = TrackingAfterExecution(d.plan, res);
+   if(!tracked)
+     {
+      // Keep the pre-send IN_FLIGHT checkpoint on disk. Otherwise a restart
+      // could forget this fault and accept new entries without reconciliation.
+      m_recoveryBlocked = true;
+      m_controller.Fault("confirmed order has no trackable position; operator reconciliation required");
+     }
    AttachTickets(d.signalId, res);
    ApplySignalState(d.signalId, QME_SIG_EXECUTION_PENDING, QME_REJ_NONE, "sent to broker");
    ApplySignalState(d.signalId, QME_SIG_EXECUTED, QME_REJ_NONE,
                     "ticket " + IntegerToString((long)res.positionTicket));
+   if(!tracked) return(true);
    CloseOppositePositions(d.plan);
    m_scheduler.Cooldown(d.plan.symbol, TimeCurrent(), m_cfg.In.cooldownSecPerSymbol);
+   string checkpointErr = "";
+   const string payload = CStateRecovery::Compose(*m_account.State(), m_positions, m_history,
+                                                  m_dedup, *m_gateway.Idempotency(), m_memory);
+   if(!m_checkpoint.Save(payload, TimeCurrent(), checkpointErr))
+     {
+      m_recoveryBlocked = true; // do not overwrite the last pre-send claim
+      m_controller.Fault("post-send checkpoint failed: " + checkpointErr);
+     }
    return(true);
   }
 
@@ -681,13 +736,11 @@ bool CEngine::Cycle(const bool force, string &note)
       return(false);
      }
 
+   m_lastCycle = TimeCurrent();  // last successful scan, not merely a tick
    m_funnel.Pass(m_funnel.Stage("scan"));
 
    const SSessionResult session = m_scanner.Session();
    const SAccountContext acc = m_account.Snapshot();
-
-   string tradeWhy = "";
-   const bool mayTrade = m_controller.MayTrade(m_cfg, acc, session.tradingAllowed, tradeWhy);
 
    int approvedThisCycle = 0;
    int signalsThisCycle = 0;
@@ -738,7 +791,8 @@ bool CEngine::Cycle(const bool force, string &note)
          const double atr = rt.analysis[4].atr > 0.0 ? rt.analysis[4].atr : rt.analysis[3].atr;
          const double spread = rt.snapshot.spreadPoints;
 
-         if(!mayTrade)
+         string tradeWhy = "";
+         if(!m_controller.MayTrade(m_cfg, acc, session.tradingAllowed, tradeWhy))
            {
             QmeDecisionClear(dec);
             dec.signalId = sigs[k].id;
@@ -752,6 +806,16 @@ bool CEngine::Cycle(const bool force, string &note)
             RecordDecision(dec, m_cycles);
             m_history.Add(MakeHistoryRecord(sigs[k], QME_REJ_DISABLED_BY_CONFIG));
             m_funnel.Drop(m_funnel.Stage("trading"), QmeRejectName(QME_REJ_DISABLED_BY_CONFIG));
+            continue;
+           }
+
+         // Re-derive rather than incrementing per event: duplicate trade
+         // notifications cannot double count, and failed history blocks entry.
+         if(m_cfg.In.maxConsecutiveLosses > 0 &&
+            !m_account.State().SyncFromHistory(m_cfg.In.magic, TimeCurrent()))
+           {
+            m_controller.Fault("cannot synchronize broker loss history");
+            m_funnel.Drop(m_funnel.Stage("trading"), "broker history unavailable");
             continue;
            }
 
@@ -774,8 +838,11 @@ bool CEngine::Cycle(const bool force, string &note)
            }
          else
            {
-            m_history.Add(MakeHistoryRecord(sigs[k], QME_REJ_EXECUTION_FAILED));
-            m_funnel.Drop(m_funnel.Stage("executed"), "execution failed");
+            // The state can be unresolved rather than a proven failure.
+            STradingSignal after;
+            const bool pending = m_registry.Get(sigs[k].id, after) && after.state == QME_SIG_EXECUTION_PENDING;
+            m_history.Add(MakeHistoryRecord(sigs[k], pending ? QME_REJ_NONE : QME_REJ_EXECUTION_FAILED));
+            m_funnel.Drop(m_funnel.Stage("executed"), pending ? "execution unresolved" : "execution failed");
            }
         }
      }

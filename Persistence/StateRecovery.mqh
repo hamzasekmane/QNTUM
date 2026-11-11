@@ -70,7 +70,7 @@ string CStateRecovery::Section(const string blob, const string name)
    int from = start + StringLen(marker);
    if(from < StringLen(blob) && StringGetCharacter(blob, from) == '\n') from++;
 
-   const int next = StringFind(blob, "\n[", from);
+   const int next = StringFind(blob, "\n[", from - 1);
    const int end = (next < 0) ? StringLen(blob) : next + 1;
    if(end <= from) return("");
    return(StringSubstr(blob, from, end - from));
@@ -125,6 +125,22 @@ SRecoveryReport CStateRecovery::Apply(const string blob, CAccountState &state,
       return(r);
      }
 
+   // Require all section boundaries before applying any part of the state.
+   // This detects truncated documents, not arbitrary tampering or corruption.
+   const string markers[6] = {"[ACCT]\n", "[POS]\n", "[SIG]\n",
+                              "[DEDUP]\n", "[IDEM]\n", "[MEM]\n"};
+   int prior = 0;
+   for(int i = 0; i < 6; i++)
+     {
+      const int pos = StringFind(blob, markers[i], prior);
+      if(pos < 0)
+        {
+         r.note = "state ignored: missing or out-of-order section " + markers[i];
+         return(r);
+        }
+      prior = pos + StringLen(markers[i]);
+     }
+
    //--- account state (day equity, peak, streak)
    const string acct = Section(blob, "ACCT");
    if(StringLen(acct) > 0)
@@ -137,6 +153,12 @@ SRecoveryReport CStateRecovery::Apply(const string blob, CAccountState &state,
         }
       else
          QmeLogMsg(QME_LOG_WARN, "Recovery", "account state could not be restored");
+     }
+
+   if(!r.accountRestored)
+     {
+      r.note = "state ignored: account baseline missing or invalid";
+      return(r);
      }
 
    //--- positions
@@ -161,8 +183,15 @@ SRecoveryReport CStateRecovery::Apply(const string blob, CAccountState &state,
 
    //--- executed intents
    const string idemBlob = Section(blob, "IDEM");
-   if(StringLen(idemBlob) > 0 && idem.Deserialize(idemBlob))
+   if(StringLen(idemBlob) > 0)
+     {
+      if(!idem.Deserialize(idemBlob))
+        {
+         r.note = "state ignored: invalid intent records";
+         return(r);
+        }
       r.intentsRestored = idem.Count();
+     }
 
    //--- runtime counters
    const string mem = Section(blob, "MEM");

@@ -235,16 +235,18 @@ void Housekeeping(void)
      }
 
    //--- watchdog first: it may pause trading on a stall
-   SWatchdogVerdict w = g_watchdog.Evaluate(now, now, lastData, g_errors);
+   SWatchdogVerdict w = g_watchdog.Evaluate(now, g_engine.LastCycle(), lastData, g_errors);
    if(w.action == QME_WATCH_PAUSE)
       g_engine.Controller().Pause(w.reason);
    else if(w.action == QME_WATCH_FAULT)
       g_engine.Controller().Fault(w.reason);
 
    //--- health
-   const datetime lastCheckpoint = InpPersistState ? now : 0;
+   const datetime lastCheckpoint = InpPersistState ? g_engine.LastCheckpoint() : 0;
    SHealthReport h = CHealthMonitor::Evaluate(*g_engine.Account(), InpMagicNumber, lastData, 300,
                                               lastCheckpoint, 1800, g_errors.Total(), 50);
+   if(!h.positionsProtected && g_engine.Controller().State() != QME_RT_FAULT)
+      g_engine.Controller().Fault("unprotected position detected; operator action required");
    if(h.status != QME_HEALTH_OK)
      {
       string key = "", title = "", text = "";

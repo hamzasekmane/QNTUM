@@ -48,6 +48,7 @@ public:
    bool              Init(const string sym, const int idx, const SInputs &in, const CConfig &cfg,
                           string &err);
    void              Shutdown(void);
+   void              InvalidateAnalysis(void);
    int               SlotOf(const ENUM_TIMEFRAMES tf);
   };
 
@@ -113,6 +114,18 @@ void CSymbolRuntime::Shutdown(void)
       series[i].Reset();
      }
    zones.Shutdown();
+  }
+
+void CSymbolRuntime::InvalidateAnalysis(void)
+  {
+   QmeSnapshotClear(snapshot);
+   snapshot.symbol = symbol;
+   QmeDataQualityClear(quality);
+   for(int i = 0; i < QME_TF_SLOTS; i++)
+     {
+      tfReady[i] = false;
+      QmeAnalysisClear(analysis[i]);
+     }
   }
 
 int CSymbolRuntime::SlotOf(const ENUM_TIMEFRAMES tf)
@@ -262,6 +275,8 @@ bool CScanner::Scan(const bool force, string &note)
    m_session = CSessionEngine::Evaluate(m_clock, *m_cfg);
    if(!m_data.Refresh(force))
      {
+      for(int i = 0; i < m_count; i++)
+         if(m_rt[i] != NULL) m_rt[i].InvalidateAnalysis();
       m_failures++;
       note = "market data refresh failed";
       return(false);
@@ -285,6 +300,8 @@ bool CScanner::Scan(const bool force, string &note)
 //------------------------------------------------------------------//
 bool CScanner::RefreshSymbol(CSymbolRuntime &rt, const datetime gmtNow, const long gmtOffset)
   {
+   // Never reuse any part of the previous scan after a failed refresh.
+   rt.InvalidateAnalysis();
    const double spreadPoints = (double)SymbolInfoInteger(rt.symbol, SYMBOL_SPREAD);
 
    bool anyReady = false;
@@ -344,7 +361,17 @@ bool CScanner::RefreshSymbol(CSymbolRuntime &rt, const datetime gmtNow, const lo
    s.momentum = rt.analysis[entry].momentum.value;
    s.structureValid = rt.analysis[entry].structureValid;
    s.liquidityValid = rt.analysis[entry].liquidityValid;
-   s.dataValid = rt.analysis[entry].valid && q.ok;
+   // All four timeframes consumed by Generate() must be freshly available.
+   s.dataValid = q.ok;
+   for(int i = 1; i < QME_TF_SLOTS; i++)
+     {
+      SDataQuality tfQuality;
+      if(!rt.tfReady[i] || !rt.analysis[i].valid ||
+         !CDataQualityGuard::Evaluate(rt.ctx[i], spreadPoints, tfQuality))
+         s.dataValid = false;
+     }
+   CTickProcessor *ticks = m_data.Ticks(rt.symbol);
+   if(ticks == NULL || !ticks.IsFresh(300)) s.dataValid = false;
    s.quality = q;
    s.zoneCount = rt.zones.ActiveCount(now);
    rt.snapshot = s;

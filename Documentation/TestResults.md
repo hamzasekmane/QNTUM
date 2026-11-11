@@ -4,6 +4,15 @@
 > executed by the user in MetaEditor/Strategy Tester; static checker
 > output is never recorded here as a test result.
 
+## Current source update (2026-11-10)
+
+`python3 test_system.py`: **39/39 static checks passed** after the current
+changes. These are heuristics and checks of test-file presence, not MQL5
+execution. New assertions were added to `Test_Execution`,
+`Test_Instrumentation`, and `Test_RestartRecovery` (including real file
+round-trip); all are **NOT COMPILED / NOT RUN** on the current source. The
+user reports MT5 build 6251; it is not installed in this environment.
+
 ## Execution round 1 (2026-11-10, user-run in MetaEditor)
 
 `QME_Main.mq5`: compiled 0 errors / 0 warnings, then suites executed.

@@ -74,6 +74,9 @@ bool CPositionStateStore::Track(const STrackedPosition &p)
    if(i >= 0) { m_items[i] = p; return(true); }
    if(m_count >= QME_MAX_TRACKED_POSITIONS)
      {
+      // Closed slots may be reused; never evict an open position.
+      for(int k = 0; k < m_count; k++)
+         if(m_items[k].closed) { m_items[k] = p; return(true); }
       QmeLogMsg(QME_LOG_WARN, "Positions", "position store full, cannot track " +
                 IntegerToString((long)p.ticket));
       return(false);
@@ -127,6 +130,9 @@ bool CPositionStateStore::At(const int i, STrackedPosition &out)
 int CPositionStateStore::ReconcileWithBroker(const ulong magic)
   {
    int dropped = 0;
+   // A disconnected terminal's position list is not reliable evidence of closure.
+   if(!(bool)TerminalInfoInteger(TERMINAL_CONNECTED) && !(bool)MQLInfoInteger(MQL_TESTER))
+      return(0);
    for(int i = 0; i < m_count; i++)
      {
       if(m_items[i].closed) continue;

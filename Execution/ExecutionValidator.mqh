@@ -30,6 +30,8 @@ class CExecutionValidator
 public:
    static SRequestValidation Local(const MqlTradeRequest &req, const STradePlan &plan,
                                    const SSymbolSpec &spec, const CConfig &cfg);
+   static SRequestValidation RequestRisk(const MqlTradeRequest &req, const STradePlan &plan,
+                                         const double equity, const CConfig &cfg);
    static SRequestValidation OrderCheckServer(const MqlTradeRequest &req);
    static SRequestValidation Full(const MqlTradeRequest &req, const STradePlan &plan,
                                   const SSymbolSpec &spec, const CConfig &cfg);
@@ -111,6 +113,47 @@ SRequestValidation CExecutionValidator::Local(const MqlTradeRequest &req, const 
      }
 
    v.ok = true;
+   return(v);
+  }
+
+//------------------------------------------------------------------//
+SRequestValidation CExecutionValidator::RequestRisk(const MqlTradeRequest &req, const STradePlan &plan,
+                                                    const double equity, const CConfig &cfg)
+  {
+   SRequestValidation v;
+   v.ok = false; v.retcode = 0; v.lastError = 0; v.reason = QME_REJ_RISK_PER_TRADE;
+   v.comment = "request risk unavailable";
+   if(equity <= 0.0 || !QmeIsFinite(equity) || req.volume <= 0.0 ||
+      req.price <= 0.0 || req.sl <= 0.0 || req.tp <= 0.0) return(v);
+   if(plan.side != QME_SIDE_BUY && plan.side != QME_SIDE_SELL) return(v);
+   if(!QmeStopIsValid(plan.side, req.price, req.sl) ||
+      !QmeTargetIsValid(plan.side, req.price, req.tp)) return(v);
+
+   const double rr = QmeComputeRR(plan.side, req.price, req.sl, req.tp);
+   if(!QmeIsFinite(rr) || rr < cfg.In.minRR)
+     {
+      v.reason = QME_REJ_RR;
+      v.comment = "request price no longer meets minimum reward:risk";
+      return(v);
+     }
+
+   const ENUM_ORDER_TYPE direction = plan.side == QME_SIDE_BUY ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+   double pnl = 0.0;
+   if(!OrderCalcProfit(direction, req.symbol, req.volume, req.price, req.sl, pnl) ||
+      !QmeIsFinite(pnl) || pnl >= 0.0)
+     {
+      v.comment = "broker could not calculate request stop loss in account currency";
+      return(v);
+     }
+   const double budget = equity * cfg.In.riskPerTradePct / 100.0;
+   if(!QmeIsFinite(budget) || budget <= 0.0 || -pnl > budget + 1e-8)
+     {
+      v.comment = "request stop loss exceeds current equity risk budget";
+      return(v);
+     }
+   v.ok = true;
+   v.reason = QME_REJ_NONE;
+   v.comment = "request risk validated before send; costs and slippage not included";
    return(v);
   }
 

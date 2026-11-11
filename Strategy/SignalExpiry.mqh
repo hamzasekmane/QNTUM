@@ -33,12 +33,13 @@ public:
 ENUM_QME_REJECT CSignalExpiry::Check(const STradingSignal &s, const datetime now,
                                      const double price, const bool zoneActive)
   {
-   //--- expiry applies ONLY to pre-execution states. EXECUTED/MONITORING
-   //--- signals are positions, not pending ideas: they can never expire
+   //--- expiry applies only before submission. A submitted order with an
+   //--- unresolved broker outcome must stay pending for reconciliation.
+   //--- EXECUTED/MONITORING signals are positions and can never expire
    //--- here, and terminal states are final. (IsTerminal alone was not
    //--- enough: EXECUTED is live, not terminal, yet must be immune.)
    if(!(s.state == QME_SIG_DETECTED || s.state == QME_SIG_EVALUATING ||
-        s.state == QME_SIG_APPROVED || s.state == QME_SIG_EXECUTION_PENDING))
+        s.state == QME_SIG_APPROVED))
       return(QME_REJ_NONE);
 
    if(s.expires > 0 && now >= s.expires)
@@ -69,7 +70,7 @@ int CSignalExpiry::Process(CSignalRegistry &registry, CSignalLifecycle &lifecycl
       if(!registry.At(i, s)) continue;
       //--- only pre-execution states can expire
       if(!(s.state == QME_SIG_DETECTED || s.state == QME_SIG_EVALUATING ||
-           s.state == QME_SIG_APPROVED || s.state == QME_SIG_EXECUTION_PENDING))
+           s.state == QME_SIG_APPROVED))
          continue;
 
       STradingZone zone;

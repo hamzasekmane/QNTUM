@@ -1,5 +1,28 @@
 # Production Readiness — QuantumMarketEngine
 
+> Current update, 2026-11-10: **NOT production-ready.** This source has changed
+> since the historical 0/0 compile. Recompile the EA and all 21 tests on the
+> user's MT5 build 6251, then execute and record failures and skips. No MT5,
+> broker execution, crash/restart, backtest or DEMO forward evidence is
+> available for the current changes. Default trading switches remain off.
+>
+> The latest safety changes add a pre-send checkpoint, preserve ambiguous
+> intents in flight, refuse incomplete portfolio/protection data, and repair
+> checkpoint paths, multiline reads and watchdog timestamps. These are source
+> changes, **not validated production safeguards**. The checkpoint is still
+> shared across accounts/instances, lacks integrity and locking guarantees,
+> and clean-start baselines/recovery are not safe enough for live use. Broker
+> reconciliation, pending orders, full-account exposure, clock-stall behavior,
+> slippage/costs, and position adoption remain open. See
+> `SystemReReview_AR.md`, `ProductionDiagnosis_AR.md` and `TestResults.md` for details.
+> The re-review documented stale streaks, symbol refresh and order-lifecycle
+> issues. Subsequent source changes add conservative guards and recycling,
+> but have not been compiled or validated on MT5. See `DevelopmentUpdate_AR.md`
+> for the updated scope, limitations, and required tests.
+
+## Historical status (superseded for current source)
+
+
 > Date: 2026-11-10. Nothing here is labelled ready without evidence.
 
 | Gate | Status | Evidence / blocker |

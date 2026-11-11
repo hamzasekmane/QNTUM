@@ -52,9 +52,29 @@ int RunPositionRecoveryTests(void)
    g_kit.CheckClose(r1.sl, 1.09900, 1e-8, "stop preserved exactly");
 
    //--- the broker is authoritative: fake tickets must be dropped
-   const int stale = restored.ReconcileWithBroker(999001);
-   g_kit.CheckEqual(stale, 2, "positions absent from the broker are marked closed");
-   g_kit.CheckEqual(restored.OpenCount(), 0, "no position remains open");
+   if((bool)TerminalInfoInteger(TERMINAL_CONNECTED) || (bool)MQLInfoInteger(MQL_TESTER))
+     {
+      const int stale = restored.ReconcileWithBroker(999001);
+      g_kit.CheckEqual(stale, 2, "positions absent from the broker are marked closed");
+      g_kit.CheckEqual(restored.OpenCount(), 0, "no position remains open");
+     }
+   else
+     {
+      g_kit.CheckEqual(restored.ReconcileWithBroker(999001), 0, "disconnection does not mark positions closed");
+      g_kit.CheckEqual(restored.OpenCount(), 2, "disconnected positions retained");
+     }
+
+   // Closed records may be recycled, but open records must never be evicted.
+   CPositionStateStore full;
+   bool filled = true;
+   for(int i = 0; i < QME_MAX_TRACKED_POSITIONS; i++)
+      if(!full.Track(FakePosition((ulong)(10000 + i), QME_SIDE_BUY))) filled = false;
+   g_kit.Check(filled, "position store fills to capacity");
+   g_kit.Check(!full.Track(FakePosition(20000, QME_SIDE_BUY)), "full open store refuses another record");
+   g_kit.Check(full.Close(10000), "closed slot marked");
+   g_kit.Check(full.Track(FakePosition(20000, QME_SIDE_SELL)), "closed slot recycled");
+   g_kit.Check(full.Find(10001, got) && !got.closed, "open record preserved on reuse");
+   g_kit.Check(full.Find(20000, got) && !got.closed, "replacement position tracked");
 
    //--- an empty blob is not silently accepted
    CPositionStateStore empty;

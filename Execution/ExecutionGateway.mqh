@@ -5,8 +5,7 @@
 //|  Pipeline:                                                        |
 //|   idempotency -> final authorization -> request build -> validate     |
 //|   -> OrderCheck -> send (retry policy) -> reconcile -> journal         |
-//|  If any step fails the intent is recorded as failed and nothing is     |
-//|  left in an unknown state without reconciliation.                    |
+//|  Ambiguous outcomes remain blocked for operator reconciliation.       |
 //+------------------------------------------------------------------+
 #ifndef __QME_EXECUTION_GATEWAY_MQH__
 #define __QME_EXECUTION_GATEWAY_MQH__
@@ -28,6 +27,8 @@
 #include "ExecutionMonitor.mqh"
 #include "TradeJournal.mqh"
 #include "RetryPolicy.mqh"
+#include "../Persistence/CheckpointManager.mqh"
+#include "../Persistence/StateRecovery.mqh"
 
 class CExecutionGateway
   {
@@ -37,19 +38,27 @@ private:
    CExecutionMonitor  m_monitor;
    CTradeJournal      m_journal;
    bool               m_ready;
+   CCheckpointManager *m_checkpoint;
+   CPositionStateStore *m_positions;
+   CSignalHistoryStore *m_history;
+   CSignalDeduplicator *m_dedup;
+   CRuntimeMemory     *m_memory;
    ENUM_QME_REJECT    m_lastReject;
    string             m_lastRejectNote;
 
-   bool              ReconcileAfterAmbiguous(const STradePlan &plan, SExecutionResult &res);
 
 public:
                      CExecutionGateway(void);
    bool              Init(CAccountContext *account, const CConfig &cfg, string &err);
    void              Shutdown(void);
+   void              AttachPersistence(CCheckpointManager *checkpoint, CPositionStateStore *positions,
+                                       CSignalHistoryStore *history, CSignalDeduplicator *dedup,
+                                       CRuntimeMemory *memory);
 
    bool              Execute(const STradePlan &plan, const SSymbolSpec &spec,
                              const CConfig &cfg, SExecutionResult &res);
 
+   static bool       SupportsEntryType(const ENUM_QME_ENTRY_TYPE type) { return(type == QME_ENTRY_MARKET); }
    CIdempotencyGuard* Idempotency(void) { return(&m_idem); }
    CExecutionMonitor* Monitor(void) { return(&m_monitor); }
    CTradeJournal     *Journal(void) { return(&m_journal); }
@@ -64,6 +73,11 @@ CExecutionGateway::CExecutionGateway(void)
   {
    m_account = NULL;
    m_ready = false;
+   m_checkpoint = NULL;
+   m_positions = NULL;
+   m_history = NULL;
+   m_dedup = NULL;
+   m_memory = NULL;
    m_lastReject = QME_REJ_NONE;
    m_lastRejectNote = "";
   }
@@ -96,29 +110,15 @@ void CExecutionGateway::Shutdown(void)
   }
 
 //------------------------------------------------------------------//
-bool CExecutionGateway::ReconcileAfterAmbiguous(const STradePlan &plan, SExecutionResult &res)
+void CExecutionGateway::AttachPersistence(CCheckpointManager *checkpoint, CPositionStateStore *positions,
+                                          CSignalHistoryStore *history, CSignalDeduplicator *dedup,
+                                          CRuntimeMemory *memory)
   {
-   ulong tk = 0;
-   double vol = 0.0, open = 0.0, sl = 0.0, tp = 0.0;
-   if(CPositionReconciler::FindPosition(plan.symbol, plan.magic, tk, vol, open, sl, tp))
-     {
-      res.positionTicket = tk;
-      res.filledVolume = vol;
-      res.filledPrice = open;
-      res.confirmed = true;
-      res.state = QME_EXEC_RECONCILED;
-      res.comment = "reconciled: position " + IntegerToString((long)tk) + " exists";
-      m_journal.RecordEvent("RECONCILED", plan.symbol, res.comment);
-      QmeLogMsg(QME_LOG_WARN, "Gateway", plan.symbol + " " + res.comment);
-      return(true);
-     }
-
-   res.confirmed = false;
-   res.state = QME_EXEC_UNKNOWN_STATE;
-   res.comment = "ambiguous broker answer and no position found: state unknown";
-   m_journal.RecordEvent("UNKNOWN", plan.symbol, res.comment);
-   QmeLogMsg(QME_LOG_ERROR, "Gateway", plan.symbol + " " + res.comment);
-   return(false);
+   m_checkpoint = checkpoint;
+   m_positions = positions;
+   m_history = history;
+   m_dedup = dedup;
+   m_memory = memory;
   }
 
 //------------------------------------------------------------------//
@@ -168,6 +168,19 @@ bool CExecutionGateway::Execute(const STradePlan &plan, const SSymbolSpec &spec,
       return(false);
      }
 
+   // Pending-order lifecycle and risk reservation are not implemented yet.
+   // Do not silently treat a pending order as a fill.
+   if(!SupportsEntryType(plan.entryType))
+     {
+      res.state = QME_EXEC_FAILED;
+      res.reject = QME_REJ_DISABLED_BY_CONFIG;
+      res.comment = "pending entries disabled until lifecycle and risk reconciliation are implemented";
+      m_lastReject = res.reject;
+      m_lastRejectNote = res.comment;
+      m_monitor.OnLocalReject(plan.symbol, res.comment);
+      return(false);
+     }
+
    //--- 3. request
    MqlTradeRequest req;
    string buildWhy = "";
@@ -206,6 +219,20 @@ bool CExecutionGateway::Execute(const STradePlan &plan, const SSymbolSpec &spec,
       return(false);
      }
 
+   // The quote used by the builder may differ from the signal used for
+   // sizing. Revalidate RR and broker-calculated loss on the request itself.
+   const SRequestValidation risk = CExecutionValidator::RequestRisk(req, plan, acc.equity, cfg);
+   if(!risk.ok)
+     {
+      res.state = QME_EXEC_FAILED;
+      res.reject = risk.reason;
+      res.comment = risk.comment;
+      m_lastReject = res.reject;
+      m_lastRejectNote = res.comment;
+      m_monitor.OnLocalReject(plan.symbol, res.comment);
+      return(false);
+     }
+
    //--- 5. claim the intent, then send
    if(!m_idem.Begin(plan.fingerprint, TimeCurrent()))
      {
@@ -214,6 +241,31 @@ bool CExecutionGateway::Execute(const STradePlan &plan, const SSymbolSpec &spec,
       m_lastReject = res.reject;
       m_lastRejectNote = "could not claim the intent";
       res.comment = m_lastRejectNote;
+      return(false);
+     }
+
+   // Write the in-flight claim BEFORE OrderSend. If the process crashes
+   // after this point, recovery must not silently resend this intent.
+   string persistErr = "";
+   bool saved = false;
+   if(m_checkpoint != NULL && m_positions != NULL && m_history != NULL &&
+      m_dedup != NULL && m_memory != NULL && m_checkpoint.Enabled())
+     {
+      const string payload = CStateRecovery::Compose(*m_account.State(), *m_positions,
+                                                     *m_history, *m_dedup, m_idem, *m_memory);
+      saved = m_checkpoint.Save(payload, TimeCurrent(), persistErr);
+     }
+   else
+      persistErr = "persistence unavailable";
+   if(!saved)
+     {
+      m_idem.Abort(plan.fingerprint); // no order was sent
+      res.state = QME_EXEC_FAILED;
+      res.reject = QME_REJ_INTERNAL;
+      res.comment = "pre-send checkpoint failed: " + persistErr;
+      m_lastReject = res.reject;
+      m_lastRejectNote = res.comment;
+      m_monitor.OnLocalReject(plan.symbol, res.comment);
       return(false);
      }
 
@@ -226,13 +278,17 @@ bool CExecutionGateway::Execute(const STradePlan &plan, const SSymbolSpec &spec,
    //--- 6. ambiguous outcome: reconcile before anything else
    if(!ok && res.state == QME_EXEC_UNKNOWN_STATE)
      {
-      const bool found = ReconcileAfterAmbiguous(plan, res);
-      m_idem.Complete(plan.fingerprint, found, TimeCurrent());
+      // Symbol + magic cannot identify this intent: a pre-existing position
+      // or a delayed/pending order could be mistaken for a fill. Keep the
+      // claim IN_FLIGHT until an operator reconciles it with broker records.
+      res.reject = QME_REJ_EXECUTION_FAILED;
+      res.comment = "ambiguous order outcome; intent remains blocked pending reconciliation";
+      m_journal.RecordEvent("UNKNOWN", plan.symbol, res.comment);
       m_monitor.OnResult(res, latency);
       m_journal.RecordResult(plan, res);
-      m_lastReject = QME_REJ_EXECUTION_FAILED;
+      m_lastReject = res.reject;
       m_lastRejectNote = res.comment;
-      return(found);
+      return(false);
      }
 
    m_idem.Complete(plan.fingerprint, ok, TimeCurrent());

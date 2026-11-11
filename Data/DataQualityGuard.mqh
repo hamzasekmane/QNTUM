@@ -70,11 +70,11 @@ bool CDataQualityGuard::Evaluate(CTimeframeContext &ctx, const double curSpreadP
    const datetime lastBar = series.LastClosedBarTime();
    out.barAgeSeconds = (lastBar > 0 && server > lastBar) ? (double)(server - lastBar) : 0.0;
    const double periodSec = (double)PeriodSeconds(ctx.Timeframe());
-   if(lastBar <= 0)
+   if(lastBar <= 0 || server <= 0 || lastBar > server || periodSec <= 0.0)
      {
       out.stale = true;
       out.flags |= QME_DQ_FLAG_CLOSED;
-      out.note = "no closed bar time";
+      out.note = "invalid server clock or closed bar time";
      }
    else if(periodSec > 0.0 && out.barAgeSeconds > periodSec * 3.0)
      {
@@ -108,7 +108,7 @@ bool CDataQualityGuard::Evaluate(CTimeframeContext &ctx, const double curSpreadP
         }
      }
 
-   out.ok = ((out.flags & (QME_DQ_FLAG_STALE | QME_DQ_FLAG_MISSING | QME_DQ_FLAG_INCONSISTENT | QME_DQ_FLAG_SHORT)) == 0);
+   out.ok = ((out.flags & (QME_DQ_FLAG_STALE | QME_DQ_FLAG_MISSING | QME_DQ_FLAG_INCONSISTENT | QME_DQ_FLAG_SHORT | QME_DQ_FLAG_CLOSED)) == 0);
    return(out.ok);
   }
 
