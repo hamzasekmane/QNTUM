@@ -91,10 +91,10 @@ bool CExposureManager::Check(const string symbol, const SSymbolSpec &spec,
    const double addNotional = Notional(symbol, volume, price);
    if(addNotional <= 0.0)
      {
-      //--- some brokers do not report contract size: skip the notional limit
-      //--- but say so instead of silently passing
+      // Missing exposure data is not evidence that the limits are met.
+      reason = QME_REJ_INTERNAL;
       why = "notional unavailable for " + symbol + " (contract size not reported)";
-      return(true);
+      return(false);
      }
 
    const double symbolNotional = pf.NotionalFor(symbol) + addNotional;

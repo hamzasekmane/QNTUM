@@ -159,7 +159,7 @@ bool CMarketData::Init(const SInputs &in, string &err)
    int usable = 0;
    for(int s = 0; s < m_symbolCount; s++)
      {
-      const string sym = QmeUpper(syms[s]);
+      const string sym = syms[s];
       m_symbols[s] = sym;
       m_symbolReady[s] = false;
 

@@ -105,7 +105,7 @@ bool CIdempotencyGuard::Begin(const string fp, const datetime now)
    const int i = Find(fp);
    if(i >= 0)
      {
-      if(m_state[i] == (int)QME_IDEM_EXECUTED) return(false);
+      if(m_state[i] != (int)QME_IDEM_FAILED) return(false);
       m_state[i] = (int)QME_IDEM_IN_FLIGHT;
       m_time[i] = now;
       return(true);
@@ -181,23 +181,43 @@ string CIdempotencyGuard::Serialize(void)
 bool CIdempotencyGuard::Deserialize(const string blob)
   {
    if(StringLen(blob) == 0) return(false);
-   Reset();
+   string fps[QME_MAX_FINGERPRINTS];
+   datetime times[QME_MAX_FINGERPRINTS];
+   int states[QME_MAX_FINGERPRINTS];
+   int loaded = 0;
    string lines[];
    const int n = StringSplit(blob, '\n', lines);
-   int loaded = 0;
-   for(int i = 0; i < n && m_count < QME_MAX_FINGERPRINTS; i++)
+   for(int i = 0; i < n; i++)
      {
       if(StringLen(lines[i]) == 0) continue;
+      if(loaded >= QME_MAX_FINGERPRINTS) return(false);
       string f[];
-      if(StringSplit(lines[i], ';', f) < 4) continue;
-      if(f[0] != "idem") continue;
-      m_time[m_count] = (datetime)StringToInteger(f[1]);
-      m_state[m_count] = (int)StringToInteger(f[2]);
-      m_fp[m_count] = f[3];
-      m_count++;
+      const int fields = StringSplit(lines[i], ';', f);
+      if(fields < 4 || f[0] != "idem") return(false);
+      const long t = StringToInteger(f[1]);
+      const long state = StringToInteger(f[2]);
+      if(t <= 0 || IntegerToString(t) != f[1] ||
+         state < (long)QME_IDEM_IN_FLIGHT || state > (long)QME_IDEM_FAILED ||
+         IntegerToString(state) != f[2]) return(false);
+      string fp = f[3];
+      for(int k = 4; k < fields; k++) fp += ";" + f[k];
+      if(StringLen(fp) == 0) return(false);
+      for(int k = 0; k < loaded; k++) if(fps[k] == fp) return(false);
+      fps[loaded] = fp;
+      times[loaded] = (datetime)t;
+      states[loaded] = (int)state;
       loaded++;
      }
-   return(loaded > 0);
+   if(loaded == 0) return(false);
+   Reset();
+   for(int i = 0; i < loaded; i++)
+     {
+      m_fp[i] = fps[i];
+      m_time[i] = times[i];
+      m_state[i] = states[i];
+     }
+   m_count = loaded;
+   return(true);
   }
 
 #endif // __QME_EXECUTION_IDEMPOTENCY_MQH__

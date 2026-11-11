@@ -67,6 +67,12 @@ int RunLifecycleTests(void)
    g_kit.Check(CSignalTypes::IsTerminal(QME_SIG_EXPIRED), "EXPIRED is terminal");
    g_kit.Check(!CSignalTypes::IsTerminal(QME_SIG_MONITORING), "MONITORING is live");
    g_kit.Check(CSignalTypes::IsLive(QME_SIG_APPROVED), "APPROVED is live");
+   STradingSignal pending;
+   QmeSignalClear(pending);
+   pending.state = QME_SIG_EXECUTION_PENDING;
+   pending.expires = 100;
+   g_kit.Check(CSignalExpiry::Check(pending, 200, 0.0, false) == QME_REJ_NONE,
+               "unresolved submitted signal cannot expire before reconciliation");
 
    //--- the mutator refuses what the table refuses
    CSignalLifecycle lc;

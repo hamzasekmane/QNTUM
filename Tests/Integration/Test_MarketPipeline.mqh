@@ -15,6 +15,22 @@ int RunMarketPipelineTest(void)
   {
    g_kit.Begin("Integration/Test_MarketPipeline");
 
+   g_kit.Check(CTickProcessor::IsTickTimeFresh(1000, 1300, 300), "tick at age limit is fresh");
+   g_kit.Check(!CTickProcessor::IsTickTimeFresh(999, 1300, 300), "old tick rejected");
+   g_kit.Check(!CTickProcessor::IsTickTimeFresh(1301, 1300, 300), "future tick rejected");
+   g_kit.Check(!CTickProcessor::IsTickTimeFresh(0, 1300, 300), "missing tick time rejected");
+   g_kit.Check(!CTickProcessor::IsTickTimeFresh(1000, 0, 300), "missing server time rejected");
+
+   // Failed refreshes must never retain a previous valid snapshot/analysis.
+   CSymbolRuntime invalidation;
+   invalidation.symbol = "test";
+   invalidation.snapshot.dataValid = true;
+   invalidation.tfReady[4] = true;
+   invalidation.analysis[4].valid = true;
+   invalidation.InvalidateAnalysis();
+   g_kit.Check(!invalidation.snapshot.dataValid && !invalidation.tfReady[4] &&
+               !invalidation.analysis[4].valid, "invalidation clears stale snapshot and analysis");
+
    SInputs in;
    QmeInputsDefaults(in);
    in.symbolList = _Symbol;

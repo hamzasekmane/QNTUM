@@ -145,6 +145,20 @@ int RunInstrumentationTests(void)
    ledger.Record(QME_EVT_SIGNAL_REJECTED, "EURUSD", 43, "rejected", QME_REJ_LOW_SCORE);
    g_kit.CheckEqual(ledger.Count(), beforeCount + 1, "a direct record is stored");
 
+   // Watchdog ages must treat equal timestamps as fresh, not 999999s old.
+   CErrorTracker errors;
+   CSystemWatchdog watchdog;
+   watchdog.Init(60, 300, 50);
+   SWatchdogVerdict fresh = watchdog.Evaluate(1000, 1000, 1000, errors);
+   g_kit.Check(fresh.action == QME_WATCH_NONE && fresh.cycleAgeSec == 0 && fresh.dataAgeSec == 0,
+               "equal timestamps are fresh");
+   SWatchdogVerdict slow = watchdog.Evaluate(1200, 1000, 1200, errors);
+   g_kit.Check(slow.action == QME_WATCH_FAULT, "stalled cycle faults");
+   SWatchdogVerdict staleData = watchdog.Evaluate(1400, 1400, 1000, errors);
+   g_kit.Check(staleData.action == QME_WATCH_PAUSE, "stale data pauses");
+   SWatchdogVerdict future = watchdog.Evaluate(1000, 1001, 1000, errors);
+   g_kit.Check(future.action == QME_WATCH_FAULT, "future cycle timestamp fails closed");
+
    return(g_kit.End());
   }
 

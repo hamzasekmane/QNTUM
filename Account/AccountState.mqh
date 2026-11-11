@@ -38,7 +38,7 @@ public:
    void              Update(const SAccountContext &acc);
 
    //--- authoritative re-derivation from broker deal history
-   void              SyncFromHistory(const ulong magic, const datetime serverTime);
+   bool              SyncFromHistory(const ulong magic, const datetime serverTime);
 
    //--- metrics (percentages, always >= 0)
    double            DailyPlPct(const SAccountContext &acc);
@@ -158,14 +158,14 @@ void CAccountState::OnClosedTrade(const double profit)
 //| the broker's deal history (authoritative). Positions opened by other |
 //| EAs are ignored by filtering on our magic number.                    |
 //+------------------------------------------------------------------//
-void CAccountState::SyncFromHistory(const ulong magic, const datetime serverTime)
+bool CAccountState::SyncFromHistory(const ulong magic, const datetime serverTime)
   {
-   if(!m_initialized) return;
+   if(!m_initialized || serverTime <= 0) return(false);
 
-   //--- streak window: 30 days is enough for any sane guard
-   const datetime streakFrom = serverTime - 30 * 86400;
-   if(!HistorySelect(streakFrom, serverTime))
-      return;
+   // Do not silently truncate a streak to the last 30 days. Availability
+   // and completeness of the broker's retained history still require review.
+   if(!HistorySelect(0, serverTime))
+      return(false);
 
    const int deals = HistoryDealsTotal();
    m_consecutiveLosses = 0;
@@ -178,11 +178,11 @@ void CAccountState::SyncFromHistory(const ulong magic, const datetime serverTime
    for(int i = 0; i < deals; i++)
      {
       const ulong ticket = HistoryDealGetTicket(i);
-      if(ticket == 0) continue;
+      if(ticket == 0) return(false);
       if((ulong)HistoryDealGetInteger(ticket, DEAL_MAGIC) != magic) continue;
 
       const long entryType = HistoryDealGetInteger(ticket, DEAL_ENTRY);
-      if(entryType != DEAL_ENTRY_OUT && entryType != DEAL_ENTRY_OUT_BY)
+      if(entryType != DEAL_ENTRY_OUT && entryType != DEAL_ENTRY_OUT_BY && entryType != DEAL_ENTRY_INOUT)
          continue;
 
       const double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT) +
@@ -205,10 +205,10 @@ void CAccountState::SyncFromHistory(const ulong magic, const datetime serverTime
    for(int i = deals - 1; i >= 0; i--)
      {
       const ulong ticket = HistoryDealGetTicket(i);
-      if(ticket == 0) continue;
+      if(ticket == 0) return(false);
       if((ulong)HistoryDealGetInteger(ticket, DEAL_MAGIC) != magic) continue;
       const long entryType = HistoryDealGetInteger(ticket, DEAL_ENTRY);
-      if(entryType != DEAL_ENTRY_OUT && entryType != DEAL_ENTRY_OUT_BY)
+      if(entryType != DEAL_ENTRY_OUT && entryType != DEAL_ENTRY_OUT_BY && entryType != DEAL_ENTRY_INOUT)
          continue;
       const double profit = HistoryDealGetDouble(ticket, DEAL_PROFIT) +
                             HistoryDealGetDouble(ticket, DEAL_SWAP) +
@@ -219,6 +219,7 @@ void CAccountState::SyncFromHistory(const ulong magic, const datetime serverTime
      }
    m_consecutiveLosses = streak;
    if(streak > m_maxConsecutiveLosses) m_maxConsecutiveLosses = streak;
+   return(true);
   }
 
 //------------------------------------------------------------------//

@@ -57,6 +57,13 @@ int RunExecutionTests(void)
   {
    g_kit.Begin("Integration/Test_Execution");
 
+   g_kit.Check(COrderManager::IsUnresolvedAcceptance(TRADE_RETCODE_PLACED), "placed order requires reconciliation");
+   g_kit.Check(COrderManager::IsUnresolvedAcceptance(TRADE_RETCODE_DONE_PARTIAL), "partial fill requires reconciliation");
+   g_kit.Check(!COrderManager::IsUnresolvedAcceptance(TRADE_RETCODE_DONE), "done is not classified as partial or placed");
+   g_kit.Check(CExecutionGateway::SupportsEntryType(QME_ENTRY_MARKET), "market entry is supported");
+   g_kit.Check(!CExecutionGateway::SupportsEntryType(QME_ENTRY_LIMIT), "limit entry is blocked");
+   g_kit.Check(!CExecutionGateway::SupportsEntryType(QME_ENTRY_STOP), "stop entry is blocked");
+
    const SSymbolSpec spec = ExecSpec();
    if(!spec.valid)
      {
@@ -126,12 +133,63 @@ int RunExecutionTests(void)
                                             20, "QME", why2),
                "builder refuses an inverted buy stop");
 
+   //--- request risk validation rejects invalid inputs before broker calls
+   MqlTradeRequest riskReq;
+   ZeroMemory(riskReq);
+   riskReq.symbol = spec.symbol;
+   riskReq.volume = 0.1;
+   riskReq.price = 1.10000;
+   riskReq.sl = 1.09800;
+   riskReq.tp = 1.10010; // RR is far below the configured minimum
+   SRequestValidation riskResult = CExecutionValidator::RequestRisk(riskReq, good, 10000.0, cfg);
+   g_kit.Check(!riskResult.ok && riskResult.reason == QME_REJ_RR,
+               "request quote below minimum RR is blocked");
+   riskResult = CExecutionValidator::RequestRisk(riskReq, good, 0.0, cfg);
+   g_kit.Check(!riskResult.ok, "request risk requires positive equity");
+   riskReq.tp = 1.10400;
+   riskReq.symbol = "QME_NONEXISTENT_TEST_SYMBOL";
+   riskResult = CExecutionValidator::RequestRisk(riskReq, good, 10000.0, cfg);
+   g_kit.Check(!riskResult.ok, "unavailable broker loss calculation fails closed");
+
+   //--- compare against the broker calculation without ever sending an order
+   MqlTick riskTick;
+   double brokerPnl = 0.0;
+   MqlTradeRequest brokerReq;
+   ZeroMemory(brokerReq);
+   brokerReq.symbol = spec.symbol;
+   brokerReq.volume = spec.volMin;
+   if(SymbolInfoTick(spec.symbol, riskTick) && riskTick.ask > 0.0 && spec.tickSize > 0.0)
+     {
+      brokerReq.price = riskTick.ask;
+      brokerReq.sl = riskTick.ask - 100.0 * spec.tickSize;
+      brokerReq.tp = riskTick.ask + 300.0 * spec.tickSize;
+     }
+   if(brokerReq.sl > 0.0 && OrderCalcProfit(ORDER_TYPE_BUY, brokerReq.symbol, brokerReq.volume,
+                                             brokerReq.price, brokerReq.sl, brokerPnl) && brokerPnl < 0.0)
+     {
+      const double breakEvenEquity = (-brokerPnl) * 100.0 / cfg.In.riskPerTradePct;
+      riskResult = CExecutionValidator::RequestRisk(brokerReq, good, breakEvenEquity * 2.0, cfg);
+      g_kit.Check(riskResult.ok, "broker-calculated loss inside budget passes");
+      riskResult = CExecutionValidator::RequestRisk(brokerReq, good, breakEvenEquity * 0.5, cfg);
+      g_kit.Check(!riskResult.ok && riskResult.reason == QME_REJ_RISK_PER_TRADE,
+                  "broker-calculated loss above budget is refused");
+     }
+   else
+      g_kit.Skip("broker profit calculation unavailable for request-risk test");
+
    //--- idempotency: an intent can be claimed once, not twice
    CIdempotencyGuard guard;
    string idemWhy = "";
    g_kit.Check(guard.CanExecute("fp-1", idemWhy), "fresh intent may execute");
    g_kit.Check(guard.Begin("fp-1", TimeCurrent()), "intent claimed");
    g_kit.Check(!guard.CanExecute("fp-1", idemWhy), "in-flight intent is blocked");
+   g_kit.Check(!guard.Begin("fp-1", TimeCurrent()), "in-flight claim cannot be overwritten");
+   CIdempotencyGuard unresolved;
+   g_kit.Check(unresolved.Deserialize(guard.Serialize()), "in-flight claim can be restored");
+   g_kit.Check(!unresolved.CanExecute("fp-1", idemWhy), "restored in-flight intent remains blocked");
+   g_kit.Check(!unresolved.Begin("fp-1", TimeCurrent()), "restored claim cannot be overwritten");
+   g_kit.Check(!unresolved.Deserialize("idem;1000;0;fp-1\n"), "invalid persisted state rejected");
+   g_kit.Check(!unresolved.CanExecute("fp-1", idemWhy), "invalid restore preserves held claim");
    guard.Complete("fp-1", true, TimeCurrent());
    g_kit.Check(!guard.CanExecute("fp-1", idemWhy), "executed intent is blocked");
    g_kit.CheckEqual(guard.InFlightCount(), 0, "no intent left in flight");

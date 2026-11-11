@@ -197,6 +197,32 @@ bool CPreTradeValidator::Validate(STradePlan &plan, const SSymbolSpec &spec,
       return(Fail(out, QME_REJ_CONSECUTIVE_LOSSES, streakWhy, (double)streak));
    out.consecutiveLosses = streak;
 
+   // Until pending-order exposure and lifecycle are accounted for, do not
+   // add risk while any account order remains active (including other EAs).
+   out.checksRun++;
+   if(OrdersTotal() > 0)
+      return(Fail(out, QME_REJ_INTERNAL, "active orders require reconciliation", (double)OrdersTotal()));
+
+   // The portfolio snapshot filters by magic. Refuse to trade rather than
+   // silently omit another EA's or a manual position from account risk.
+   out.checksRun++;
+   for(int i = 0; i < PositionsTotal(); i++)
+     {
+      const ulong ticket = PositionGetTicket(i);
+      if(ticket == 0 || !PositionSelectByTicket(ticket))
+         return(Fail(out, QME_REJ_INTERNAL, "cannot inspect account position", 0.0));
+      if((ulong)PositionGetInteger(POSITION_MAGIC) != cfg.In.magic)
+         return(Fail(out, QME_REJ_INTERNAL, "foreign position not included in portfolio risk", (double)ticket));
+     }
+
+   //--- never open more risk when an owned position is unprotected or
+   //--- the position snapshot could not be read completely.
+   out.checksRun++;
+   if(pf.ScanErrors() > 0)
+      return(Fail(out, QME_REJ_INTERNAL, "portfolio snapshot incomplete", (double)pf.ScanErrors()));
+   if(pf.WithoutStop() > 0)
+      return(Fail(out, QME_REJ_SL_INVALID, "owned position without stop loss", (double)pf.WithoutStop()));
+
    //--- 14/15 exposure + duplicates
    out.checksRun++;
    out.positionsOpen = pf.Count();

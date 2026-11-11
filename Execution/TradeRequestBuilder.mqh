@@ -58,6 +58,9 @@ bool CTradeRequestBuilder::Build(MqlTradeRequest &req, const STradePlan &plan,
         { why = "no live tick for " + plan.symbol; return(false); }
       if(tick.ask <= 0.0 || tick.bid <= 0.0 || tick.ask < tick.bid)
         { why = "invalid quotes for " + plan.symbol; return(false); }
+      const datetime now = TimeTradeServer();
+      if((!(bool)TerminalInfoInteger(TERMINAL_CONNECTED) && !(bool)MQLInfoInteger(MQL_TESTER)) || now <= 0 || tick.time <= 0 || tick.time > now || now - tick.time > 300)
+        { why = "stale or unavailable quote time for " + plan.symbol; return(false); }
 
       req.action = TRADE_ACTION_DEAL;
       if(plan.side == QME_SIDE_BUY)

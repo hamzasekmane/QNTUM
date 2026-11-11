@@ -3,8 +3,7 @@
 //|  Atomic text storage in the terminal's common folder.                |
 //|                                                                   |
 //|  Writes go to <name>.tmp and are moved over the real file only        |
-//|  after a successful flush, so a crash mid-write can never destroy     |
-//|  the previous good checkpoint.                                       |
+//|  after a flush. Filesystem crash durability is not proven here.       |
 //+------------------------------------------------------------------+
 #ifndef __QME_PERSIST_STATESTORE_MQH__
 #define __QME_PERSIST_STATESTORE_MQH__
@@ -98,7 +97,7 @@ bool CStateStore::Write(const string content, string &err)
       return(false);
      }
 
-   const bool ok = (FileWriteString(h, content) >= 0);
+   const bool ok = (FileWriteString(h, content) > 0);
    FileFlush(h);
    FileClose(h);
 
@@ -110,8 +109,8 @@ bool CStateStore::Write(const string content, string &err)
       return(false);
      }
 
-   //--- atomic replace
-   if(!FileMove(tmp, FILE_COMMON, m_name, FILE_COMMON | FILE_REWRITE))
+   //--- replace destination after writing the temporary file
+   if(!FileMove(tmp, FILE_COMMON, dst, FILE_COMMON | FILE_REWRITE))
      {
       err = "cannot replace " + dst + " (" + QmeLastErrorText() + ")";
       m_failures++;
@@ -155,7 +154,10 @@ bool CStateStore::Read(string &content, string &err)
       m_failures++;
       return(false);
      }
-   content = FileReadString(h, (int)size);
+   // FILE_TXT reads one line at a time, regardless of the length argument.
+   // Compose emits line-oriented documents with a terminating newline.
+   while(!FileIsEnding(h))
+      content += FileReadString(h) + "\n";
    FileClose(h);
 
    m_reads++;

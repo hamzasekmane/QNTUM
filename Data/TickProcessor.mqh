@@ -44,6 +44,7 @@ public:
    double            SpreadMaxPoints(void) { return(m_spreadMaxPoints); }
    double            SpreadRatio(void);
 
+   static bool       IsTickTimeFresh(const datetime tickTime, const datetime now, const int maxAgeSec);
    bool              IsFresh(const int maxAgeSec);
    void              Reset(void);
   };
@@ -97,7 +98,10 @@ bool CTickProcessor::Update(void)
      }
    //--- a tick older than the previous one is not an update
    if(m_valid && t.time_msc < m_tick.time_msc)
+     {
+      m_valid = false;
       return(false);
+     }
 
    m_tick = t;
    m_valid = true;
@@ -133,13 +137,18 @@ double CTickProcessor::SpreadRatio(void)
   }
 
 //------------------------------------------------------------------//
+bool CTickProcessor::IsTickTimeFresh(const datetime tickTime, const datetime now, const int maxAgeSec)
+  {
+   if(now <= 0 || tickTime <= 0 || now < tickTime) return(false);
+   return(maxAgeSec <= 0 || now - tickTime <= maxAgeSec);
+  }
+
 bool CTickProcessor::IsFresh(const int maxAgeSec)
   {
    if(!m_valid) return(false);
-   if(maxAgeSec <= 0) return(true);
-   const datetime now = TimeCurrent();
-   if(m_lastUpdate <= 0) return(false);
-   return((now - m_lastUpdate) <= maxAgeSec);
+   if(!(bool)TerminalInfoInteger(TERMINAL_CONNECTED) && !(bool)MQLInfoInteger(MQL_TESTER))
+      return(false);
+   return(IsTickTimeFresh(m_tick.time, TimeTradeServer(), maxAgeSec));
   }
 
 #endif // __QME_DATA_TICKPROCESSOR_MQH__

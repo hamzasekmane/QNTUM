@@ -141,9 +141,13 @@ def test_fvg_crash_regression_guard():
 
 def test_executed_signals_cannot_expire():
     src = read("Strategy/SignalExpiry.mqh")
-    guarded = ("QME_SIG_DETECTED" in src and "QME_SIG_EXECUTION_PENDING" in src
-               and src.count("QME_SIG_DETECTED") >= 2)  # Check + Process share it
-    return check("expiry restricted to pre-execution states (Check & Process)",
+    # Both guards list only pre-submission states. This remains a textual
+    # check; the MQL unit suite must execute to validate behavior.
+    guard = "s.state == QME_SIG_APPROVED))"
+    guarded = (src.count("s.state == QME_SIG_DETECTED") == 2
+               and src.count(guard) == 2
+               and "s.state == QME_SIG_EXECUTION_PENDING" not in src)
+    return check("expiry restricted to pre-submission states (Check & Process)",
                  guarded)
 
 

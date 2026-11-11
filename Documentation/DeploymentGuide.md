@@ -1,5 +1,7 @@
 # QuantumMarketEngine — Deployment Guide
 
+> **OUTDATED / NOT A PRODUCTION RUNBOOK:** the instructions below predate the current safety changes and contain unsupported recovery and real-deployment claims. Do not enable trading based on this guide. See `ProductionDiagnosis_AR.md` and `ProductionReadiness.md`.
+
 ## 0. Honesty statement (read first)
 
 This repository was produced in an environment **without a MetaEditor, without an

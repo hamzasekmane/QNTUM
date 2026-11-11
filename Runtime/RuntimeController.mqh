@@ -159,7 +159,7 @@ bool CRuntimeController::MayTrade(const CConfig &cfg, const SAccountContext &acc
 //------------------------------------------------------------------//
 void CRuntimeController::Pause(const string reason)
   {
-   if(m_state == QME_RT_STOPPING || m_state == QME_RT_STOPPED) return;
+   if(m_state == QME_RT_FAULT || m_state == QME_RT_STOPPING || m_state == QME_RT_STOPPED) return;
    m_state = QME_RT_PAUSED;
    m_reason = reason;
    m_changed = TimeCurrent();
