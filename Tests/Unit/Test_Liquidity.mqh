@@ -43,8 +43,46 @@ int RunLiquidityTests(void)
    SLiquidityLevel none;
    g_kit.Check(!CLiquidityMapBuilder::NearestAbove(map, 1.2000, none), "no level above the range");
 
-   //--- sweep detection on fabricated bars is not attempted: report a skip
-   g_kit.Skip("sweep detection requires live bars (covered by integration tests)");
+   // Closed-bar classifier: oldest-to-newest, with one later close to confirm.
+   SLiquidityBar bars[];
+   ArrayResize(bars, 3);
+   bars[0].high=9.8;  bars[0].low=9.0;  bars[0].close=9.5;
+   bars[1].high=10.6; bars[1].low=9.7;  bars[1].close=9.9; // raid above 10, closes back inside
+   bars[2].high=9.9;  bars[2].low=8.8;  bars[2].close=8.9; // later CHoCH below 9.2
+   SLiquidityOutcome outcome = CLiquidityOutcome::Classify(bars, 3, 10.0,
+                                      QME_SIDE_BUY, 9.2, 1, 0.05);
+   g_kit.CheckEqual(outcome.classification, QME_LIQUIDITY_SWEEP,
+                    "wick raid plus rejection and later CHoCH classifies sweep");
+   g_kit.CheckEqual(outcome.sweepBar, 1, "reports the liquidity raid bar");
+
+   bars[1].close=10.3; bars[1].high=10.4;
+   bars[2].close=10.25; bars[2].high=10.5;
+   outcome = CLiquidityOutcome::Classify(bars, 3, 10.0, QME_SIDE_BUY,
+                                          9.2, 1, 0.05);
+   g_kit.CheckEqual(outcome.classification, QME_LIQUIDITY_BREAKOUT,
+                    "close outside plus later hold classifies breakout");
+
+   bars[2].close=9.95;
+   outcome = CLiquidityOutcome::Classify(bars, 3, 10.0, QME_SIDE_BUY,
+                                          9.2, 1, 0.05);
+   g_kit.CheckEqual(outcome.classification, QME_LIQUIDITY_WAIT,
+                    "failed breakout hold is not mislabeled as sweep");
+
+   // Mirror case: raid below equal lows, then close above opposite structure.
+   bars[0].high=10.5; bars[0].low=9.7; bars[0].close=10.2;
+   bars[1].high=10.2; bars[1].low=9.4; bars[1].close=10.1;
+   bars[2].high=10.4; bars[2].low=9.8; bars[2].close=10.3;
+   outcome = CLiquidityOutcome::Classify(bars, 3, 9.6, QME_SIDE_SELL,
+                                          10.25, 1, 0.05);
+   g_kit.CheckEqual(outcome.classification, QME_LIQUIDITY_SWEEP,
+                    "sell-side raid plus bullish structure close confirms reversal");
+
+   // Rejection alone is deliberately not a confirmed trade signal.
+   bars[2].close=10.0;
+   outcome = CLiquidityOutcome::Classify(bars, 3, 9.6, QME_SIDE_SELL,
+                                          10.25, 1, 0.05);
+   g_kit.CheckEqual(outcome.classification, QME_LIQUIDITY_WAIT,
+                    "rejection without CHoCH remains WAIT");
 
    return(g_kit.End());
   }

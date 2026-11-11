@@ -31,6 +31,7 @@
 #include "Structure/BreakoutEngine.mqh"
 #include "Liquidity/LiquidityEngine.mqh"
 #include "Liquidity/LiquiditySweep.mqh"
+#include "Liquidity/LiquidityOutcome.mqh"
 #include "Liquidity/VolumeProfile.mqh"
 #include "PriceAction/CandleEngine.mqh"
 #include "PriceAction/CandlePatternEngine.mqh"
@@ -166,6 +167,8 @@ struct SMarketAnalysis
    //--- liquidity
    SLiquidityAnalysis   liquidity;
    SSweepResult         sweep;
+   SLiquidityOutcome    liquidityOutcome;
+   ENUM_QME_SIDE        liquidityEventSide;
    SVolumeProfile       volumeProfile;
    SLocationResult      location;
 
@@ -227,6 +230,11 @@ void QmeAnalysisClear(SMarketAnalysis &a)
    a.liquidity.session.valid = false;
 
    QmeSweepClear(a.sweep);
+   a.liquidityOutcome.classification = QME_LIQUIDITY_WAIT;
+   a.liquidityOutcome.sweepBar = -1;
+   a.liquidityOutcome.wickExtreme = 0.0;
+   a.liquidityOutcome.reason = "not evaluated";
+   a.liquidityEventSide = QME_SIDE_NONE;
    a.volumeProfile.valid = false;
    a.volumeProfile.nodeCount = 0;
    a.volumeProfile.poc = 0.0;
