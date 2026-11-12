@@ -42,6 +42,7 @@ public:
    int               LiveCount(void);
    int               PendingExecutionCount(void);
    bool              HasLiveFingerprint(const string fingerprint) { return(LiveFingerprintExists(fingerprint)); }
+   bool              HasInternalRejectFingerprint(const string fingerprint);
    long              Added(void) { return(m_added); }
    long              Evicted(void) { return(m_evicted); }
 
@@ -69,6 +70,17 @@ bool CSignalRegistry::LiveFingerprintExists(const string fingerprint)
       if(m_signals[i].fingerprint != fingerprint) continue;
       if(CSignalTypes::IsLive(m_signals[i].state)) return(true);
      }
+   return(false);
+  }
+
+//------------------------------------------------------------------//
+bool CSignalRegistry::HasInternalRejectFingerprint(const string fingerprint)
+  {
+   if(StringLen(fingerprint)==0) return(false);
+   for(int i=ArraySize(m_signals)-1;i>=0;i--)
+      if(m_signals[i].fingerprint==fingerprint &&
+         m_signals[i].state==QME_SIG_REJECTED &&
+         m_signals[i].reject==QME_REJ_INTERNAL) return(true);
    return(false);
   }
 

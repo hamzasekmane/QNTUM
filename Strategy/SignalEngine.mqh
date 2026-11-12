@@ -238,6 +238,11 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
                                        (long)merged[i].cand.zoneId, setup.barTime);
       if(RegistryHasFingerprint(registry, fp))
         { m_lastOutcome = "live/unresolved fingerprint blocks duplicate"; continue; }
+      // An INTERNAL rejection is deterministic for this closed-bar fingerprint.
+      // Suppress repeats until setup.barTime changes; live/unresolved and sent
+      // plans retain their stronger registry/idempotency protections above.
+      if(registry.HasInternalRejectFingerprint(fp))
+        { m_lastOutcome = "identical INTERNAL rejection suppressed until new closed bar"; continue; }
       if(m_dedup != NULL && m_dedup.IsDuplicate(fp, cfg.In.cooldownSecPerSymbol, TimeCurrent()))
         { m_lastOutcome = "fingerprint cooldown active"; continue; }
 

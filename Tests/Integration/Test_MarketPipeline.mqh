@@ -54,6 +54,9 @@ int RunMarketPipelineTest(void)
    const datetime weekdayMissing=StringToTime("2026.11.10 10:15");
    g_kit.Check(QmeBarOverlapsQuoteWindows(weekdayMissing,m15,2,weekday,1),
                "missing M15 interval during open quote session is detected");
+   const datetime goodFridayMissing=StringToTime("2026.04.03 00:00");
+   g_kit.Check(QmeBarOverlapsQuoteWindows(goodFridayMissing,86400,5,weekday,1),
+               "weekly Friday schedule considers exact Good Friday D1 interval open; do not whitelist without holiday evidence");
    SQuoteSessionWindow unavailable[]; ArrayResize(unavailable,0);
    g_kit.Check(!QmeBarOverlapsQuoteWindows(weekdayMissing,m15,2,unavailable,0),
                "empty session data cannot certify a bar as scheduled or safe");

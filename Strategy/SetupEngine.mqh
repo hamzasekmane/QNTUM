@@ -18,6 +18,7 @@
 #include "../Core/Types.mqh"
 #include "../Core/Config.mqh"
 #include "../Core/Utils.mqh"
+#include "../Core/Logger.mqh"
 #include "../Intelligence/MtfConfluenceEngine.mqh"
 #include "MTF/CandidateClusterer.mqh"
 
@@ -65,6 +66,16 @@ SSetupVerdict CSetupEngine::Evaluate(const SMergedCandidate &mc, const SConfluen
    v.htfAligned = conf.valid ? conf.htfAligned : false;
    v.confirmations = CountConfirmations(mc);
    v.penalty = 0.0;
+   static datetime lastSetupTrace=0;
+   const datetime traceNow=TimeCurrent();
+   if(traceNow-lastSetupTrace>=30)
+     {
+      lastSetupTrace=traceNow;
+      QmeLogMsg(QME_LOG_INFO,"SetupGate",mc.cand.symbol+" "+QmeSideName(mc.cand.side)+
+                " candidateValid="+QmeBoolStr(mc.cand.valid)+
+                " mergedValid="+QmeBoolStr(mc.valid)+
+                " dq="+QmeBoolStr(dq.ok));
+     }
 
    if(!mc.valid)
      {

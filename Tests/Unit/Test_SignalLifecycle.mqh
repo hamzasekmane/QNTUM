@@ -102,6 +102,18 @@ int RunLifecycleTests(void)
    duplicate.id = 1003;
    g_kit.Check(!reg.Add(duplicate, addReason, addWhy), "live fingerprint still blocks duplicate signal");
 
+   STradingSignal internal = LifecycleSignal();
+   internal.id=1004; internal.fingerprint="EURUSD|M15|BUY|bar-123";
+   g_kit.Check(reg.Add(internal,addReason,addWhy),"internal-reject fixture added");
+   CSignalLifecycle internalLc;
+   internalLc.Transition(internal,QME_SIG_EVALUATING,QME_REJ_NONE,"test",TimeCurrent());
+   internalLc.Transition(internal,QME_SIG_REJECTED,QME_REJ_INTERNAL,"invalid merge",TimeCurrent());
+   reg.Update(internal);
+   g_kit.Check(reg.HasInternalRejectFingerprint(internal.fingerprint),
+               "same internal-reject fingerprint is suppressed");
+   g_kit.Check(!reg.HasInternalRejectFingerprint("EURUSD|M15|BUY|bar-124"),
+               "changed closed-bar fingerprint may be reevaluated");
+
    g_kit.Check(lc.Transition(s, QME_SIG_EVALUATING, QME_REJ_NONE, "ok", TimeCurrent()),
                "transition() accepts DETECTED -> EVALUATING");
    g_kit.CheckEqual((long)s.state, (long)QME_SIG_EVALUATING, "state updated");
