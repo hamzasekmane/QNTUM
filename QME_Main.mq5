@@ -234,12 +234,18 @@ void Housekeeping(void)
       if(rt0 != NULL) lastData = rt0.snapshot.time;
      }
 
-   //--- watchdog first: it may pause trading on a stall
-   SWatchdogVerdict w = g_watchdog.Evaluate(now, g_engine.LastCycle(), lastData, g_errors);
-   if(w.action == QME_WATCH_PAUSE)
-      g_engine.Controller().Pause(w.reason);
-   else if(w.action == QME_WATCH_FAULT)
-      g_engine.Controller().Fault(w.reason);
+   // A blocked recovery intentionally suppresses normal scan cycles. Do not
+   // misclassify this deliberate fail-closed state as a dead/stalled engine;
+   // position reconciliation and management continue on the timer.
+   if(!g_engine.RecoveryBlocked())
+     {
+      //--- watchdog first: it may pause trading on a genuine stall
+      SWatchdogVerdict w = g_watchdog.Evaluate(now, g_engine.LastCycle(), lastData, g_errors);
+      if(w.action == QME_WATCH_PAUSE)
+         g_engine.Controller().Pause(w.reason);
+      else if(w.action == QME_WATCH_FAULT)
+         g_engine.Controller().Fault(w.reason);
+     }
 
    //--- health
    const datetime lastCheckpoint = InpPersistState ? g_engine.LastCheckpoint() : 0;

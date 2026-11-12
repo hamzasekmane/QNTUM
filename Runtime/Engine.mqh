@@ -140,6 +140,7 @@ public:
                                    const MqlTradeResult &result);
 
    bool              Ready(void) { return(m_ready); }
+   bool              RecoveryBlocked(void) { return(m_recoveryBlocked); }
    string            LastError(void) { return(m_error); }
    CConfig*          Config(void) { return(&m_cfg); }
    CScanner*         ScannerRef(void) { return(&m_scanner); }
@@ -750,10 +751,12 @@ bool CEngine::Cycle(const bool force, string &note)
    // an unknown persisted execution state.
    if(m_recoveryBlocked)
      {
+      // This is an intentional safe no-op, not a failed/stalled cycle. Timer
+      // maintenance and transaction reconciliation run outside Cycle().
       note = "recovery blocked: entries disabled; operator reconciliation required";
       m_profiler.End(pCycle);
       m_inCycle = false;
-      return(false);
+      return(true);
      }
 
    if(!m_scheduler.ScanDue(TimeCurrent()))

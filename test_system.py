@@ -247,8 +247,11 @@ def test_pipeline_regressions():
           and "authorization recheck failed" in controller
           and "resume denied pending authorization reinitialization" in controller
           and "g_engine.LastDecision()" in dashboard
-          and "input bool              InpRequireHtfAlignment = false" in dashboard)
-    return check("timer scan, rejected fingerprint retry, auth revocation, unknown intent and real last-decision diagnostics", ok)
+          and "input bool              InpRequireHtfAlignment = false" in dashboard
+          and "bool              RecoveryBlocked(void)" in engine
+          and "return(true);" in engine[engine.find("if(m_recoveryBlocked)", engine.find("bool CEngine::Cycle")):]
+          and "if(!g_engine.RecoveryBlocked())" in dashboard)
+    return check("timer scan, fail-closed recovery no-op/watchdog exclusion, rejected fingerprint retry and execution guards", ok)
 
 
 def test_signal_deduplicator_hash_index_contract():
