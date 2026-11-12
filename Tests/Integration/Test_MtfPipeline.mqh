@@ -151,7 +151,8 @@ int RunMtfPipelineTest(void)
          SMergedCandidate invalidCandidate; QmeCandidateClear(invalidCandidate.cand);
          invalidCandidate.valid=false;
          SConfluenceResult invalidConf; ZeroMemory(invalidConf);
-         const SSetupVerdict invalidVerdict=CSetupEngine::Evaluate(invalidCandidate,invalidConf,cfg,good);
+         SDataQuality invalidDq; QmeDataQualityClear(invalidDq); invalidDq.ok=true;
+         const SSetupVerdict invalidVerdict=CSetupEngine::Evaluate(invalidCandidate,invalidConf,cfg,invalidDq);
          g_kit.Check(!invalidVerdict.ok && invalidVerdict.reason==QME_REJ_INTERNAL,
                      "SetupEngine continues to reject genuinely invalid merged candidate");
         }
