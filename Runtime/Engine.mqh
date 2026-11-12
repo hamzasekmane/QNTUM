@@ -745,19 +745,23 @@ bool CEngine::Cycle(const bool force, string &note)
       return(false);
      }
 
-   // A failed recovery is a hard entry/scan gate. Timer maintenance above this
-   // method still reconciles and manages broker positions; transactions remain
-   // accepted by OnTransaction. Never let a healthy-looking scan proceed from
-   // an unknown persisted execution state.
-   if(m_recoveryBlocked)
+   // A failed recovery always disables execution and checkpoint writes. Permit
+   // signal-only scanning solely under an explicit analysis-only configuration
+   // with every trading authorization switch off. Unknown saved intents must
+   // never be acted on or overwritten, but do not prevent a safe signal preview.
+   const bool recoverySignalOnly = (m_recoveryBlocked && m_cfg.In.analysisOnly &&
+                                    !m_cfg.In.enableDemoTrading &&
+                                    !m_cfg.In.enableRealTrading &&
+                                    !m_cfg.In.realTradingArmed);
+   if(m_recoveryBlocked && !recoverySignalOnly)
      {
-      // This is an intentional safe no-op, not a failed/stalled cycle. Timer
-      // maintenance and transaction reconciliation run outside Cycle().
       note = "recovery blocked: entries disabled; operator reconciliation required";
       m_profiler.End(pCycle);
       m_inCycle = false;
-      return(true);
+      return(true); // deliberate safe no-op, not a failed/stalled cycle
      }
+   if(recoverySignalOnly)
+      QmeLogDebug("Engine", "recovery blocked; signal-only scan active; entries and checkpoint writes disabled");
 
    if(!m_scheduler.ScanDue(TimeCurrent()))
      {
@@ -844,6 +848,23 @@ bool CEngine::Cycle(const bool force, string &note)
          SDecision dec;
          const double atr = rt.analysis[4].atr > 0.0 ? rt.analysis[4].atr : rt.analysis[3].atr;
          const double spread = rt.snapshot.spreadPoints;
+
+         if(recoverySignalOnly)
+           {
+            QmeDecisionClear(dec);
+            dec.signalId = sigs[k].id;
+            dec.symbol = sigs[k].symbol;
+            dec.side = sigs[k].side;
+            dec.score = sigs[k].score;
+            dec.time = TimeCurrent();
+            dec.verdict = QME_DEC_DEFERRED;
+            dec.reason = QME_REJ_DISABLED_BY_CONFIG;
+            dec.note = "signal-only preview: saved state recovery blocked; no execution";
+            RecordDecision(dec, m_cycles);
+            m_history.Add(MakeHistoryRecord(sigs[k], QME_REJ_DISABLED_BY_CONFIG));
+            m_funnel.Drop(m_funnel.Stage("trading"), "recovery blocked; signal-only preview");
+            continue;
+           }
 
          string tradeWhy = "";
          if(!m_controller.MayTrade(m_cfg, acc, session.tradingAllowed, tradeWhy))
@@ -980,6 +1001,10 @@ string CEngine::Status(void)
    const SAccountContext acc = m_account.Snapshot();
    return(string("engine=") + (m_ready ? "initialized" : "not-initialized") +
           " recovery=" + (m_recoveryBlocked ? "BLOCKED" : "clear") +
+          " signal-preview=" + (m_recoveryBlocked && m_cfg.In.analysisOnly &&
+                                 !m_cfg.In.enableDemoTrading &&
+                                 !m_cfg.In.enableRealTrading &&
+                                 !m_cfg.In.realTradingArmed ? "ON" : "OFF") +
           " | " + m_controller.Describe() +
           " | cycles=" + IntegerToString((int)m_cycles) +
           " trades=" + IntegerToString((int)m_trades) +

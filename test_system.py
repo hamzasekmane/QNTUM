@@ -249,9 +249,13 @@ def test_pipeline_regressions():
           and "g_engine.LastDecision()" in dashboard
           and "input bool              InpRequireHtfAlignment = false" in dashboard
           and "bool              RecoveryBlocked(void)" in engine
-          and "return(true);" in engine[engine.find("if(m_recoveryBlocked)", engine.find("bool CEngine::Cycle")):]
+          and "recoverySignalOnly = (m_recoveryBlocked && m_cfg.In.analysisOnly" in engine
+          and "!m_cfg.In.enableDemoTrading" in engine
+          and "!m_cfg.In.enableRealTrading" in engine
+          and "!m_cfg.In.realTradingArmed" in engine
+          and "signal-only preview: saved state recovery blocked; no execution" in engine
           and "if(!g_engine.RecoveryBlocked())" in dashboard)
-    return check("timer scan, fail-closed recovery no-op/watchdog exclusion, rejected fingerprint retry and execution guards", ok)
+    return check("timer scan, recovery-blocked signal-only gating, watchdog exclusion and execution guards", ok)
 
 
 def test_signal_deduplicator_hash_index_contract():

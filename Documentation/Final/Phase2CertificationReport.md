@@ -22,4 +22,8 @@
 4. Perform repeated native benchmark trials after warm-up against the baseline, under comparable settings; document distributions and correctness/equivalence checks. Do not replace production algorithms absent measured benefit and equivalence.
 5. Reassess each of the 20 requested algorithms individually with implementation, integration, static/native test, compile, runtime and performance status distinguished.
 
+## Recovery-blocked signal preview
+
+A fail-closed, signal-only preview path is available when persisted-state recovery is blocked **only if** `analysisOnly=true`, `enableDemoTrading=false`, `enableRealTrading=false`, and `realTradingArmed=false`. It can scan and emit signal previews, but defers all decisions before risk/execution, does not submit orders, and does not save/overwrite the unresolved checkpoint. Runtime remains FAULT/recovery-blocked; preview availability is not operational or demo-trading readiness. If any of the three trading switches is enabled, scans remain blocked. This path has static checks only; it requires exact-revision MetaEditor compilation and MT5 validation before use.
+
 Until these gates have evidence, retain all trading protections and do not claim the system is demo-ready.
