@@ -51,8 +51,9 @@ private:
    long               m_approved;
 
    bool               RegistryHasFingerprint(CSignalRegistry &registry, const string fp);
-   int                BuildViews(const SMarketAnalysis &bias, const SMarketAnalysis &structure,
-                                 const SMarketAnalysis &setup, const SMarketAnalysis &entryTf,
+   int                BuildViews(const SMarketAnalysis &context, const SMarketAnalysis &bias,
+                                 const SMarketAnalysis &structure, const SMarketAnalysis &setup,
+                                 const SMarketAnalysis &entryTf,
                                  const ENUM_QME_SIDE side, STfView &views[]);
 
 public:
@@ -60,8 +61,9 @@ public:
    void              Attach(CScoringEngine *scorer, CStrategyRegistry *strategies,
                             CSignalLifecycle *lifecycle, CSignalDeduplicator *dedup);
 
-   int               Generate(const SMarketAnalysis &bias, const SMarketAnalysis &structure,
-                              const SMarketAnalysis &setup, const SMarketAnalysis &entryTf,
+   int               Generate(const SMarketAnalysis &context, const SMarketAnalysis &bias,
+                              const SMarketAnalysis &structure, const SMarketAnalysis &setup,
+                              const SMarketAnalysis &entryTf,
                               CZoneEngine &zones, const SSymbolSpec &spec,
                               const CConfig &cfg, const SDataQuality &dq,
                               CSignalRegistry &registry, STradingSignal &out[]);
@@ -109,14 +111,27 @@ bool CSignalEngine::RegistryHasFingerprint(CSignalRegistry &registry, const stri
   }
 
 //------------------------------------------------------------------//
-int CSignalEngine::BuildViews(const SMarketAnalysis &bias, const SMarketAnalysis &structure,
-                              const SMarketAnalysis &setup, const SMarketAnalysis &entryTf,
+int CSignalEngine::BuildViews(const SMarketAnalysis &context, const SMarketAnalysis &bias,
+                              const SMarketAnalysis &structure, const SMarketAnalysis &setup,
+                              const SMarketAnalysis &entryTf,
                               const ENUM_QME_SIDE side, STfView &views[])
   {
    ArrayResize(views, 0);
 
-   //--- bias timeframe
-   if(bias.valid && bias.bias.valid)
+   //--- context timeframe (normally D1): strongest top-down directional input
+   if(context.bias.valid)
+     {
+      STfView v;
+      v.tf = context.tf;
+      v.direction = context.bias.side;
+      v.strength = context.bias.score;
+      const int n = ArraySize(views);
+      ArrayResize(views, n + 1);
+      views[n] = v;
+     }
+
+   //--- bias timeframe (normally H4)
+   if(bias.bias.valid)
      {
       STfView v;
       v.tf = bias.tf;
@@ -128,7 +143,7 @@ int CSignalEngine::BuildViews(const SMarketAnalysis &bias, const SMarketAnalysis
      }
 
    //--- structure timeframe
-   if(structure.valid && structure.structure.valid)
+   if(structure.structure.valid)
      {
       STfView v;
       v.tf = structure.tf;
@@ -142,7 +157,7 @@ int CSignalEngine::BuildViews(const SMarketAnalysis &bias, const SMarketAnalysis
      }
 
    //--- setup timeframe
-   if(setup.valid && setup.trend.valid)
+   if(setup.trend.valid)
      {
       STfView v;
       v.tf = setup.tf;
@@ -156,7 +171,7 @@ int CSignalEngine::BuildViews(const SMarketAnalysis &bias, const SMarketAnalysis
      }
 
    //--- entry timeframe: momentum agreement, weighted low
-   if(entryTf.valid && entryTf.momentum.valid)
+   if(entryTf.momentum.valid)
      {
       STfView v;
       v.tf = entryTf.tf;
@@ -173,8 +188,9 @@ int CSignalEngine::BuildViews(const SMarketAnalysis &bias, const SMarketAnalysis
   }
 
 //------------------------------------------------------------------//
-int CSignalEngine::Generate(const SMarketAnalysis &bias, const SMarketAnalysis &structure,
-                            const SMarketAnalysis &setup, const SMarketAnalysis &entryTf,
+int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysis &bias,
+                            const SMarketAnalysis &structure, const SMarketAnalysis &setup,
+                            const SMarketAnalysis &entryTf,
                             CZoneEngine &zones, const SSymbolSpec &spec,
                             const CConfig &cfg, const SDataQuality &dq,
                             CSignalRegistry &registry, STradingSignal &out[])
@@ -191,7 +207,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &bias, const SMarketAnalysis &
 
    //--- 1. hypotheses per side (setup timeframe)
    SCandidateHypothesis hyps[];
-   const int nHyps = CCandidateCollector::Collect(bias, structure, setup, zones, spec, cfg,
+   const int nHyps = CCandidateCollector::Collect(context, structure, setup, zones, spec, cfg,
                                                   price, atr, point,
                                                   cfg.In.minRR * 1.1, 4.0,
                                                   hyps, QME_MAX_CANDIDATES);
@@ -215,7 +231,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &bias, const SMarketAnalysis &
 
       //--- 3. confluence
       STfView views[];
-      const int nViews = BuildViews(bias, structure, setup, entryTf, merged[i].cand.side, views);
+      const int nViews = BuildViews(context, bias, structure, setup, entryTf, merged[i].cand.side, views);
       const SConfluenceResult conf = CMtfConfluenceEngine::Evaluate(merged[i].cand.side,
                                                                     views, nViews);
 

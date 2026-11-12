@@ -52,10 +52,10 @@ SEntryConfirmation CEntryEngine::Confirm(const SMarketAnalysis &entryTf,
       r.note = "entry specification invalid";
       return(r);
      }
-   if(!entryTf.valid)
+   if(entryTf.price <= 0.0 || entryTf.atr <= 0.0 || entryTf.barTime <= 0)
      {
       r.reason = QME_REJ_NO_DATA;
-      r.note = "entry timeframe analysis unavailable";
+      r.note = "entry timeframe price data unavailable";
       return(r);
      }
 

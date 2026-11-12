@@ -148,7 +148,9 @@ void QmeInputsDefaults(SInputs &in)
 
    in.minScore              = QME_SCORE_MIN_DEFAULT;
    in.minConfluence         = 0.4;
-   in.requireHtfAlignment   = true;
+   // HTF bias contributes to weighted confluence but is not a hard veto;
+   // countertrend setups remain possible with sufficiently strong evidence.
+   in.requireHtfAlignment   = false;
    in.maxSignalsPerDay      = 12;
    in.signalExpiryMinutes   = 240;
    in.cooldownSecPerSymbol  = 900;
