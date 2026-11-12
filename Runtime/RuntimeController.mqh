@@ -128,7 +128,31 @@ bool CRuntimeController::MayTrade(const CConfig &cfg, const SAccountContext &acc
                                   const bool sessionAllowed, string &why)
   {
    why = "";
-   if(m_state == QME_RT_LIVE) return(true);
+
+   // LIVE is not a permanent capability: re-check current account/config
+   // permission and session on every prospective entry.
+   if(m_state == QME_RT_LIVE)
+     {
+      if(cfg.In.analysisOnly) why = "analysisOnly is enabled";
+      else if(!acc.valid || acc.mode == QME_ACC_UNKNOWN) why = "account snapshot/mode invalid";
+      else if(!acc.connected) why = "terminal disconnected";
+      else if(!acc.terminalTradeAllowed) why = "terminal AutoTrading is disabled";
+      else if(!acc.mqlTradeAllowed) why = "EA algo trading permission is disabled";
+      else if(!acc.accountTradeAllowed) why = "account trading permission is disabled";
+      else if(!acc.expertTradeAllowed) why = "account expert permission is disabled";
+      else if(acc.mode == QME_ACC_DEMO && !cfg.In.enableDemoTrading) why = "DEMO authorization revoked";
+      else if((acc.mode == QME_ACC_REAL || acc.mode == QME_ACC_CONTEST) &&
+              (!cfg.In.enableRealTrading || !cfg.In.realTradingArmed ||
+               cfg.In.expectedRealAccountLogin <= 0 || acc.login != cfg.In.expectedRealAccountLogin))
+         why = "REAL authorization revoked or login mismatch";
+      else if(acc.mode != QME_ACC_DEMO && acc.mode != QME_ACC_REAL && acc.mode != QME_ACC_CONTEST)
+         why = "unsupported account mode";
+      else if(cfg.In.sessionFilterEnabled && !sessionAllowed) why = "configured session is not allowed";
+      if(StringLen(why) == 0) return(true);
+      Pause("authorization recheck failed: " + why);
+      why = "authorization recheck failed: " + why;
+      return(false);
+     }
 
    if(m_state == QME_RT_ANALYSIS)
      {
@@ -170,10 +194,11 @@ void CRuntimeController::Pause(const string reason)
 void CRuntimeController::Resume(const string reason)
   {
    if(m_state != QME_RT_PAUSED) return;
-   m_state = QME_RT_LIVE;
-   m_reason = reason;
+   // This API has no fresh config/account/session arguments, so it cannot
+   // grant LIVE. Reinitialization must pass the full permission chain again.
+   m_reason = "resume denied pending authorization reinitialization: " + reason;
    m_changed = TimeCurrent();
-   QmeLogMsg(QME_LOG_INFO, "Controller", "resumed: " + reason);
+   QmeLogMsg(QME_LOG_WARN, "Controller", m_reason);
   }
 
 void CRuntimeController::Fault(const string reason)

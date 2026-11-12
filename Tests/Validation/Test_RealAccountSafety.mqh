@@ -141,6 +141,32 @@ int RunRealAccountSafetyTests(void)
    else
       g_kit.Skip("configuration init failed: " + err);
 
+   // A previously LIVE controller must re-check revoked permissions, and a
+   // bare Resume() must not restore trading without fresh authorization.
+   SInputs authorized;
+   QmeInputsDefaults(authorized);
+   authorized.analysisOnly = false;
+   authorized.enableRealTrading = true;
+   authorized.realTradingArmed = true;
+   authorized.expectedRealAccountLogin = 777001;
+   CConfig liveCfg;
+   string liveErr = "";
+   if(liveCfg.Init(authorized, liveErr))
+     {
+      CRuntimeController liveCtl;
+      liveCtl.Init(liveCfg, acc);
+      string whyLive = "";
+      g_kit.Check(liveCtl.MayTrade(liveCfg, acc, true, whyLive), "authorized LIVE state passes fresh permission check");
+      SAccountContext revoked = acc;
+      revoked.terminalTradeAllowed = false;
+      g_kit.Check(!liveCtl.MayTrade(liveCfg, revoked, true, whyLive), "revoked terminal permission blocks next entry");
+      g_kit.Check(!liveCtl.IsLive(), "permission revocation pauses runtime");
+      liveCtl.Resume("operator requested resume");
+      g_kit.Check(!liveCtl.IsLive(), "bare resume cannot restore LIVE without reauthorization");
+     }
+   else
+      g_kit.Check(false, "live authorization test configuration: " + liveErr);
+
    return(g_kit.End());
   }
 

@@ -515,6 +515,27 @@ int QmeSplitList(const string src, string &out[], const int maxItems)
    return(ArraySize(out));
   }
 
+//--- approximate account-currency notional using broker tick value (already
+//--- converted to deposit currency) rather than raw quote/contract units.
+//--- Conservative max(profit,loss) valuation; zero means unavailable -> fail closed.
+double QmeAccountCurrencyNotionalFromTick(const double volume, const double price,
+                                          const double tickValue, const double tickSize)
+  {
+   if(volume<=0.0 || price<=0.0 || tickValue<=0.0 || tickSize<=0.0) return(0.0);
+   const double notional=volume*price*(tickValue/tickSize);
+   return(QmeIsFinite(notional) && notional>0.0 ? notional : 0.0);
+  }
+
+double QmeAccountCurrencyNotional(const string symbol, const double volume, const double price)
+  {
+   if(StringLen(symbol)==0) return(0.0);
+   const double tickSize=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_SIZE);
+   double tickValue=MathMax(SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_VALUE_PROFIT),
+                            SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_VALUE_LOSS));
+   if(tickValue<=0.0) tickValue=SymbolInfoDouble(symbol,SYMBOL_TRADE_TICK_VALUE);
+   return(QmeAccountCurrencyNotionalFromTick(volume,price,tickValue,tickSize));
+  }
+
 //--- upper-case copy
 string QmeUpper(const string s)
   {

@@ -148,6 +148,8 @@ private:
    SSessionResult    m_session;
    long              m_scans;
    long              m_failures;
+   int               m_lastAnalysed;
+   int               m_lastDataValid;
 
    bool              BuildAnalysis(CSymbolRuntime &rt, const int slot, const datetime gmtNow,
                                    const long gmtOffset, const double spreadPoints);
@@ -178,6 +180,8 @@ CScanner::CScanner(void)
    m_cfg = NULL;
    m_scans = 0;
    m_failures = 0;
+   m_lastAnalysed = 0;
+   m_lastDataValid = 0;
    QmeSessionReset(m_session);
    for(int i = 0; i < QME_MAX_SYMBOLS; i++) m_rt[i] = NULL;
   }
@@ -211,6 +215,7 @@ bool CScanner::Init(CMarketData *data, CConfig *cfg, const SInputs &in, string &
       if(rt == NULL)
         {
          err = "out of memory creating symbol runtime";
+         Shutdown();
          return(false);
         }
       string symErr = "";
@@ -218,10 +223,12 @@ bool CScanner::Init(CMarketData *data, CConfig *cfg, const SInputs &in, string &
         {
          err = "symbol " + syms[i] + ": " + symErr;
          delete rt;
+         Shutdown();
          return(false);
         }
       m_rt[created] = rt;
       created++;
+      m_count = created;
      }
    m_count = created;
    QmeLogMsg(QME_LOG_INFO, "Scanner", IntegerToString(m_count) + " symbol(s) initialised");
@@ -286,15 +293,23 @@ bool CScanner::Scan(const bool force, string &note)
    const datetime gmtNow = m_clock.GmtTime();
    const long offset = m_clock.ServerGmtOffset();
    int analysed = 0;
+   int dataValid = 0;
    for(int i = 0; i < m_count; i++)
      {
       if(m_rt[i] == NULL) continue;
-      if(RefreshSymbol(*m_rt[i], gmtNow, offset)) analysed++;
+      if(RefreshSymbol(*m_rt[i], gmtNow, offset))
+        {
+         analysed++;
+         if(m_rt[i].snapshot.dataValid) dataValid++;
+        }
      }
 
    m_scans++;
-   if(analysed < m_count) m_failures++;
-   note = IntegerToString(analysed) + "/" + IntegerToString(m_count) + " symbol(s) analysed";
+   m_lastAnalysed = analysed;
+   m_lastDataValid = dataValid;
+   if(analysed < m_count || dataValid < m_count) m_failures++;
+   note = "analysed=" + IntegerToString(analysed) + "/" + IntegerToString(m_count) +
+          " dataValid=" + IntegerToString(dataValid) + "/" + IntegerToString(m_count);
    return(analysed > 0);
   }
 
@@ -484,6 +499,7 @@ bool CScanner::BuildAnalysis(CSymbolRuntime &rt, const int slot, const datetime 
            }
          else
             QmeSweepClear(a.sweep);
+        }
 
          // Identify accepted continuation breaks on mapped pools. Use only
          // closed bars, requiring two subsequent closes to remain outside.
@@ -516,7 +532,6 @@ bool CScanner::BuildAnalysis(CSymbolRuntime &rt, const int slot, const datetime 
                  }
               }
            }
-        }
      }
    CVolumeProfile::Build(*sr, (int)MathMin(sr.Count(), 200), 24, a.volumeProfile);
 
@@ -577,6 +592,8 @@ string CScanner::Describe(void)
    return("scanner symbols=" + IntegerToString(m_count) +
           " valid=" + IntegerToString(ready) +
           " scans=" + IntegerToString((int)m_scans) +
+          " lastAnalysed=" + IntegerToString(m_lastAnalysed) +
+          " lastDataValid=" + IntegerToString(m_lastDataValid) +
           " failures=" + IntegerToString((int)m_failures) +
           " session=" + QmeSessionName(m_session.session) + blocked);
   }

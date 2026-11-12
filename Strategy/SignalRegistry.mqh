@@ -41,6 +41,7 @@ public:
    int               Count(void) { return(ArraySize(m_signals)); }
    int               LiveCount(void);
    int               PendingExecutionCount(void);
+   bool              HasLiveFingerprint(const string fingerprint) { return(LiveFingerprintExists(fingerprint)); }
    long              Added(void) { return(m_added); }
    long              Evicted(void) { return(m_evicted); }
 

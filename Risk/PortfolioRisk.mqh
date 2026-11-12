@@ -108,10 +108,13 @@ void CPortfolioSnapshot::Build(const ulong magic, const double equity)
       const double tickValue = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_VALUE);
       const double tickSize  = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
       const double perUnit = (tickSize > 0.0) ? tickValue / tickSize : 0.0;
-      const double notionalPerLot = SymbolInfoDouble(symbol, SYMBOL_TRADE_CONTRACT_SIZE) *
-                                    MathMax(r.openPrice, SymbolInfoDouble(symbol, SYMBOL_BID));
-
-      r.notional = r.volume * notionalPerLot;
+      const double markPrice = MathMax(r.openPrice, SymbolInfoDouble(symbol, SYMBOL_BID));
+      r.notional = QmeAccountCurrencyNotional(symbol, r.volume, markPrice);
+      if(r.notional <= 0.0)
+        {
+         m_scanErrors++;
+         QmeLogMsg(QME_LOG_WARN, "Portfolio", "account-currency notional unavailable for " + symbol);
+        }
       r.riskMoney = r.hasStop ? MathAbs(r.openPrice - r.sl) * perUnit * r.volume : 0.0;
 
       const int n = ArraySize(m_items);

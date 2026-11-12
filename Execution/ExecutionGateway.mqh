@@ -274,6 +274,10 @@ bool CExecutionGateway::Execute(const STradePlan &plan, const SSymbolSpec &spec,
    const bool ok = COrderManager::Send(req, cfg, res);
    const double latency = (double)(GetMicrosecondCount() - t0) / 1000.0;
    m_monitor.OnSent(plan.symbol, latency);
+   // Remember only confirmed or unresolved broker submissions. A local
+   // validation rejection must remain retryable when market conditions change.
+   if((ok || res.state == QME_EXEC_UNKNOWN_STATE) && m_dedup != NULL)
+      m_dedup.Register(plan.fingerprint, plan.signalId, TimeCurrent());
 
    //--- 6. ambiguous outcome: reconcile before anything else
    if(!ok && res.state == QME_EXEC_UNKNOWN_STATE)

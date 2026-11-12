@@ -70,10 +70,12 @@ int RunMtfPipelineTest(void)
    zones.Init(_Symbol, 72, 60.0);
 
    SCandidateHypothesis hyps[];
+   SCandidateRejectCounts rejects;
    const int n = CCandidateCollector::Collect(bias, structure, setup, zones, spec, cfg,
                                               1.10000, 0.00100, spec.point, cfg.In.minRR,
-                                              3.0, hyps, 8);
+                                              3.0, hyps, 8, rejects);
    g_kit.CheckEqual(n, 0, "no zones -> no candidates");
+   g_kit.Check(rejects.noZone > 0, "collector counts no-zone candidate rejection");
 
    SMergedCandidate merged[];
    const int m = CCandidateClusterer::Merge(hyps, n, merged, 8);
