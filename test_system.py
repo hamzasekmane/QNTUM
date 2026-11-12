@@ -251,9 +251,33 @@ def test_pipeline_regressions():
     return check("timer scan, rejected fingerprint retry, auth revocation, unknown intent and real last-decision diagnostics", ok)
 
 
+def test_signal_deduplicator_hash_index_contract():
+    src = read("Strategy/SignalDeduplicator.mqh")
+    ok = ("int               m_hashIndex[1024];" in src
+          and "QmeHashString(fp)" in src
+          and "m_fp[record] == fp" in src
+          and "m_hashIndex[slot] = -1" in src
+          and "RebuildIndex();" in src
+          and "IndexRemove(m_fp[m_head])" in src)
+    return check("fingerprint hash index has collision comparison, tombstone, eviction and rebuild paths", ok)
+
+
+def test_advanced_algorithm_integration_contract():
+    algorithms = read("Core/Algorithms.mqh")
+    bars = read("Data/BarSeries.mqh")
+    metrics = read("Monitoring/PerformanceMetrics.mqh")
+    suite = read("Tests/Unit/Test_AdvancedAlgorithms.mqh")
+    ok = ("FindBarTimeDescending" in algorithms
+          and "FindShiftByTime" in bars and "CQmeAlgorithms::FindBarTimeDescending" in bars
+          and "WelfordPush" in metrics and "CycleStdDevMs" in metrics
+          and "large-offset variance remains stable" in suite
+          and "binary search locates exact middle timestamp" in suite)
+    return check("binary closed-bar time lookup and Welford monitoring integration have deterministic fixtures", ok)
+
+
 def test_mql5_test_programs_paired():
     programs = sorted(ROOT.glob("Tests/*/*.mq5"))
-    ok = check("21 MQL5 test programs present", len(programs) == 21,
+    ok = check("23 MQL5 test programs present", len(programs) == 23,
                f"found {len(programs)}")
     for prog in programs:
         suite = prog.with_suffix(".mqh")
@@ -278,6 +302,8 @@ ALL_TESTS = [
     test_candidate_validity_contract_and_repeat_suppression,
     test_pipeline_regressions,
     test_release_audit_regressions,
+    test_signal_deduplicator_hash_index_contract,
+    test_advanced_algorithm_integration_contract,
     test_mql5_test_programs_paired,
 ]
 

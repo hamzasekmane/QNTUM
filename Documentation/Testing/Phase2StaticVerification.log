@@ -1,0 +1,68 @@
+Phase 2 static verification (not MQL5 compile/runtime)
+UTC 2026-11-12T19:28:48Z
+$ python3 test_system.py
+====================================================================
+QNTUM — QuantumMarketEngine system test (static level)
+فحص النظام — المستوى الثابت (لا يشمل تجميع MetaEditor)
+====================================================================
+[PASS] entry point QME_Main.mq5
+[PASS] entry point QME.mqh
+[PASS] 192 MQL5 sources, none empty
+[PASS] Tools/mql5check.py (structure/includes/types) — exit=0
+[PASS] Tools/mql5fields.py (member accesses) — exit=0
+[PASS] Tools/mql5calls.py (call arity) — exit=0
+[PASS] default InpEnableDemoTrading = false — found false
+[PASS] default InpEnableRealTrading = false — found false
+[PASS] default InpRealTradingArmed = false — found false
+[PASS] default InpAnalysisOnly = true — found true
+[PASS] default InpCloseOnOppositeSignal = false — found false
+[PASS] FvgEngine.mqh: no ArrayResize on caller buffer
+[PASS] FvgEngine.mqh: capacity-bounded writes
+[PASS] OrderBlockEngine.mqh: no ArrayResize on caller buffer
+[PASS] OrderBlockEngine.mqh: capacity-bounded writes
+[PASS] expiry restricted to pre-submission states (Check & Process)
+[PASS] analysisOnly hard block present in ExecutionValidator
+[PASS] usable data is not vetoed by incomplete optional analysis; D1 top-down view wired
+[PASS] event sink registrations reset across EA reinitialization
+[PASS] quote-session API and exact FX/gold/open-session regression fixtures
+[PASS] candidate collector/merge/setup validity contract and identical INTERNAL rejection suppression
+[PASS] timer scan, rejected fingerprint retry, auth revocation, unknown intent and real last-decision diagnostics
+[PASS] account/server/magic state isolation, five-view confluence denominator, fail-closed defaults
+[PASS] 21 MQL5 test programs present — found 21
+[PASS] Integration/Test_Execution.mq5 paired with suite
+[PASS] Integration/Test_MarketPipeline.mq5 paired with suite
+[PASS] Integration/Test_MtfPipeline.mq5 paired with suite
+[PASS] Integration/Test_PositionRecovery.mq5 paired with suite
+[PASS] Regression/Test_ExecutionFailures.mq5 paired with suite
+[PASS] Regression/Test_PreviousSignals.mq5 paired with suite
+[PASS] Regression/Test_RepeatedSignals.mq5 paired with suite
+[PASS] Unit/Test_Canonical.mq5 paired with suite
+[PASS] Unit/Test_Entry.mq5 paired with suite
+[PASS] Unit/Test_Expiry.mq5 paired with suite
+[PASS] Unit/Test_FvgSafety.mq5 paired with suite
+[PASS] Unit/Test_Instrumentation.mq5 paired with suite
+[PASS] Unit/Test_Liquidity.mq5 paired with suite
+[PASS] Unit/Test_Risk.mq5 paired with suite
+[PASS] Unit/Test_Scoring.mq5 paired with suite
+[PASS] Unit/Test_SignalLifecycle.mq5 paired with suite
+[PASS] Unit/Test_Structure.mq5 paired with suite
+[PASS] Unit/Test_Zones.mq5 paired with suite
+[PASS] Validation/Test_DemoTrading.mq5 paired with suite
+[PASS] Validation/Test_RealAccountSafety.mq5 paired with suite
+[PASS] Validation/Test_RestartRecovery.mq5 paired with suite
+--------------------------------------------------------------------
+TOTAL: 45/45 passed, 0 failed
+
+النتيجة: كل الفحوصات الثابتة ناجحة ✓
+RESULT: static level OK ✓
+تنبيه: هذا لا يعني أنه جُمّع أو اختُبر على MT5 — جمّع QME_Main.mq5
+وبرامج Tests في MetaEditor للحكم النهائي (Documentation/CompilationReport.md).
+NOTE: not a MetaEditor compile/test proof — see CompilationReport.md.
+$ python3 Tools/mql5check.py
+scanned 192 files (192 implemented, 0 empty)
+
+OK: no structural errors detected (this is NOT a compilation proof)
+$ python3 Tools/mql5fields.py
+-- 0 suspicious member access(es); this is a heuristic, not a compiler
+$ python3 Tools/mql5calls.py
+-- 0 arity mismatch(es); this is a heuristic, not a compiler
