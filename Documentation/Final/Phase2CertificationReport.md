@@ -1,38 +1,25 @@
-# QME Phase 2 certification report
+# Phase 2 certification report
 
-**Decision: NOT READY FOR DEMO TESTING**
+**Certification decision: NOT READY for demo trading.** The user-supplied MetaEditor report supports a compile-pass finding for 25 targets, but runtime safety, behavioral equivalence and performance remain unverified.
 
-## Executive summary
+## Evidence status
 
-Phase 2 is blocked by missing target tools, not passed by static substitutes. This environment is Linux x86_64 and contains no MetaEditor, MT5 terminal, Strategy Tester or Wine executable; a bounded filesystem search also found no corresponding binaries. MetaEditor/terminal builds are therefore unknown. No MQL compilation, MT5 runtime tests, persistence fault injection, execution idempotency simulation or native performance measurement was run. No compiler/runtime logs can truthfully be archived.
+| Gate | Status | Evidence / limitation |
+|---|---|---|
+| Static checks | PASS (prior workspace run) | `python3 test_system.py`: 49/49; `mql5check.py`, `mql5fields.py`, `mql5calls.py` reported no indicators; `git diff --check` clean. These are static checks, not native execution. |
+| Native compilation | PASS for reported snapshot; CURRENT BRANCH UNVERIFIED | User-supplied MetaEditor output reports 25 total, 0 failed, 0 errors, 0 warnings, including `QME_Main.mq5`, 23 test EAs and the hash benchmark. The log does not identify source revision; subsequent edits to `QME_Main.mq5` and `Runtime/Engine.mqh` are therefore not proven compiled. See `Documentation/Testing/MetaEditorBuildReport.md`. |
+| MT5 runtime tests | NOT VERIFIED | No Strategy Tester execution logs/results supplied. Compiling test EAs does not run them. |
+| Restart/recovery and execution safety | NOT VERIFIED | No runtime evidence for persistence, idempotency, recovery, or risk/validator invariants. |
+| Performance / benchmark | NOT VERIFIED | Benchmark EA compile is not a benchmark result; no repeated native measurements or comparison evidence. |
+| Algorithm integration/completeness | PARTIAL / NOT CERTIFIED | Presence of reusable primitives does not establish integration in production paths or equivalence to existing behavior. Consult algorithm catalog and integration map. |
+| Demo readiness | NO-GO | Keep analysis-only ON; demo/real/real arming OFF. No live or demo trading authorization is implied. |
 
-## Objective evidence
+## Required gates before reconsidering demo
 
-- Initial HEAD: `f52ff27918bcefed06f923f46fa99e985c2f7012`; branch `arena/304c80e2-qntum`.
-- Initial working tree had untracked documentation from the previous audit in `Documentation/AlgorithmDataStructureAudit.md` and six report folders. Those files were preserved; no Git stash/reset/checkout was performed.
-- `command -v` found none of `metaeditor64.exe`, `metaeditor`, `terminal64.exe`, `wine`; filesystem search under common installation paths found no MetaEditor/terminal/agent binary.
-- Test target inventory: `QME_Main.mq5` and 21 paired MQL5 programs. Static pairing is not compilation.
-- Reran static checks; `test_system.py` passed 45/45 and all three static tools reported no findings. Full command output is archived at `Documentation/Testing/Phase2StaticVerification.log`. These checks are not Phase 2 runtime evidence.
-- Trading modes were not enabled; no broker/account interaction occurred.
+1. Identify exact source revision and MetaEditor/terminal builds corresponding to the supplied compile log; retain the complete raw log.
+2. Execute the 23 test EAs in a disconnected, isolated Strategy Tester with trading disabled. Preserve configuration and full logs; resolve failures without weakening tests.
+3. Exercise restart/recovery, duplicate-signal, risk, execution-validator and failure scenarios; verify the existing safety invariants remain unchanged.
+4. Perform repeated native benchmark trials after warm-up against the baseline, under comparable settings; document distributions and correctness/equivalence checks. Do not replace production algorithms absent measured benefit and equivalence.
+5. Reassess each of the 20 requested algorithms individually with implementation, integration, static/native test, compile, runtime and performance status distinguished.
 
-## Gate status
-
-| Gate | Status |
-|---|---|
-| MetaEditor compile all targets | BLOCKED — compiler absent/build unknown |
-| MT5 unit/integration/regression/runtime suites | BLOCKED — terminal absent |
-| Signal and execution-intent restart/unknown-result idempotency | NOT RUN / NOT CERTIFIED |
-| Persistence fault injection and broker-state recovery | NOT RUN / NOT CERTIFIED |
-| Runtime performance baseline | NOT MEASURED |
-| Demo authorization and broker constraints | NOT VERIFIED; remains disabled |
-| Real trading | Disabled; not touched |
-
-## Changes
-
-Only seven Phase 2 status reports were added. No source, tests, existing report, settings, or trading permission was changed. No backups were required for source edits because none were made; initial Git status and HEAD were recorded above. All pre-existing untracked audit reports were preserved.
-
-## Exact unblock requirement
-
-Provide an isolated supported Windows MT5 installation with licensed MetaEditor and Strategy Tester, exact target builds, a separate test data directory and synthetic/reproducible market/persistence fixtures. Compile all 22 targets and archive unedited logs; execute test suites and fault injection, export terminal journals, measure workloads, and validate demo authorization without enabling real trading. Stop on uncertain state/order reconciliation.
-
-**Final decision: NOT READY FOR DEMO TESTING.** No certification can be granted until each mandatory gate has objective evidence. This does not state that the system is profitable or safe for live trading.
+Until these gates have evidence, retain all trading protections and do not claim the system is demo-ready.
