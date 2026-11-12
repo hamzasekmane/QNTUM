@@ -215,6 +215,23 @@ def test_candidate_validity_contract_and_repeat_suppression():
     return check("candidate collector/merge/setup validity contract and identical INTERNAL rejection suppression", ok)
 
 
+def test_release_audit_regressions():
+    engine = read("Runtime/Engine.mqh")
+    utils = read("Core/Utils.mqh")
+    views = read("Strategy/SignalEngine.mqh")
+    inputs = read("QME_Main.mq5")
+    ok = ("QmeScopedStateName(scopedAccount.login" in engine
+          and "legacyUnscopedState" in engine
+          and "refusing clean start until operator reconciles" in engine
+          and "v.tf=context.tf" in views and "v.tf=entryTf.tf" in views
+          and "InpAnalysisOnly        = true" in inputs
+          and "InpEnableDemoTrading   = false" in inputs
+          and "InpEnableRealTrading   = false" in inputs
+          and "InpRealTradingArmed    = false" in inputs
+          and "string QmeScopedStateName" in utils)
+    return check("account/server/magic state isolation, five-view confluence denominator, fail-closed defaults", ok)
+
+
 def test_pipeline_regressions():
     engine = read("Runtime/Engine.mqh")
     scanner = read("Runtime/Scanner.mqh")
@@ -260,6 +277,7 @@ ALL_TESTS = [
     test_quote_session_gap_regressions,
     test_candidate_validity_contract_and_repeat_suppression,
     test_pipeline_regressions,
+    test_release_audit_regressions,
     test_mql5_test_programs_paired,
 ]
 

@@ -255,8 +255,20 @@ bool CEngine::Init(const SInputs &in, string &err)
    m_transactions.Init(m_cfg.In.magic);
 
    //--- persistence
-   if(!m_checkpoint.Init(m_cfg.In.persistState, "qme_state.txt", m_cfg.In.checkpointSec, err))
+   const SAccountContext scopedAccount=m_account.Snapshot();
+   const string scopedStateName=QmeScopedStateName(scopedAccount.login,
+                                                   scopedAccount.server,m_cfg.In.magic);
+   const bool legacyUnscopedState=FileIsExist(QME_STATE_FOLDER+"\\qme_state.txt",FILE_COMMON);
+   if(!m_checkpoint.Init(m_cfg.In.persistState, scopedStateName, m_cfg.In.checkpointSec, err))
       QmeLogMsg(QME_LOG_WARN, "Engine", "persistence disabled: " + err);
+   const bool scopedStateExists=m_checkpoint.Store().Exists();
+   if(m_cfg.In.persistState && !scopedStateExists && legacyUnscopedState)
+     {
+      // Never import an old shared state file into an account/magic namespace:
+      // it may contain another instance's unresolved order intent or positions.
+      m_recoveryBlocked=true;
+      QmeLogMsg(QME_LOG_CRITICAL,"Engine","legacy unscoped qme_state.txt exists; refusing clean start until operator reconciles account/server/magic state");
+     }
    m_replay.Init(512);
    m_funnel.Reset();
    m_profiler.Init(m_cfg.In.profileCycles);

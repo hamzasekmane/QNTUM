@@ -52,6 +52,16 @@ int RunCanonicalTests(void)
   {
    g_kit.Begin("Unit/Test_Canonical");
 
+   const string scopeA=QmeScopedStateName(52959880,"ICMarketsSC-Demo",20261110);
+   g_kit.CheckStr(scopeA,QmeScopedStateName(52959880,"ICMarketsSC-Demo",20261110),
+                  "state scope name is deterministic");
+   g_kit.Check(scopeA!=QmeScopedStateName(52959881,"ICMarketsSC-Demo",20261110),
+               "account login isolates persisted state");
+   g_kit.Check(scopeA!=QmeScopedStateName(52959880,"Other-Demo",20261110),
+               "broker server isolates persisted state");
+   g_kit.Check(scopeA!=QmeScopedStateName(52959880,"ICMarketsSC-Demo",20261111),
+               "EA magic isolates persisted state");
+
    //--- timeframes survive the name round trip
    g_kit.Check(QmeTfFromName(QmeTfName(PERIOD_M5))  == PERIOD_M5,  "M5 name round trip");
    g_kit.Check(QmeTfFromName(QmeTfName(PERIOD_H1))  == PERIOD_H1,  "H1 name round trip");

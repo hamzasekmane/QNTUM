@@ -54,6 +54,21 @@ int RunMtfPipelineTest(void)
       return(g_kit.End());
      }
 
+   // Confluence denominator contract: neutral/weak views retain their weight.
+   STfView weightedViews[]; ArrayResize(weightedViews,5);
+   weightedViews[0].tf=PERIOD_D1; weightedViews[0].direction=QME_SIDE_BUY; weightedViews[0].strength=0.5;
+   weightedViews[1].tf=PERIOD_H4; weightedViews[1].direction=QME_SIDE_BUY; weightedViews[1].strength=0.5;
+   weightedViews[2].tf=PERIOD_H1; weightedViews[2].direction=QME_SIDE_NONE; weightedViews[2].strength=0.0;
+   weightedViews[3].tf=PERIOD_M15; weightedViews[3].direction=QME_SIDE_NONE; weightedViews[3].strength=0.0;
+   weightedViews[4].tf=PERIOD_M5; weightedViews[4].direction=QME_SIDE_NONE; weightedViews[4].strength=0.0;
+   const SConfluenceResult weighted=CMtfConfluenceEngine::Evaluate(QME_SIDE_BUY,weightedViews,5);
+   g_kit.CheckClose(weighted.score,0.3766903,0.00001,
+                    "confluence uses raw timeframe weights in denominator and strength only in agreement numerator");
+   STfView onlyAligned[]; ArrayResize(onlyAligned,2);
+   onlyAligned[0]=weightedViews[0]; onlyAligned[1]=weightedViews[1];
+   const SConfluenceResult omitted=CMtfConfluenceEngine::Evaluate(QME_SIDE_BUY,onlyAligned,2);
+   g_kit.Check(omitted.score>weighted.score,"omitting missing views raises confluence; BuildViews must retain all five configured slots");
+
    //--- fabricated analyses: no zones, so the collector must return 0
    SMarketAnalysis bias, structure, setup;
    QmeAnalysisClear(bias);
