@@ -111,6 +111,7 @@ private:
    int                m_signalsToday;   // generated since m_signalDay (server day)
    datetime           m_signalDay;
    datetime           m_lastCycle;
+   string             m_lastDecision;
 
    bool               ApplySignalState(const ulong id, const ENUM_QME_SIGNAL_STATE to,
                                        const ENUM_QME_REJECT reason, const string note);
@@ -158,6 +159,7 @@ public:
    long              Trades(void) { return(m_trades); }
    long              Errors(void) { return(m_errors); }
    string            Status(void);
+   string            LastDecision(void) { return(StringLen(m_lastDecision)>0 ? m_lastDecision : "no decision yet"); }
   };
 
 //------------------------------------------------------------------//
@@ -175,6 +177,7 @@ CEngine::CEngine(void)
    m_signalsToday = 0;
    m_signalDay = 0;
    m_lastCycle = 0;
+   m_lastDecision = "";
   }
 
 //------------------------------------------------------------------//
@@ -596,6 +599,11 @@ SSignalRecord CEngine::MakeHistoryRecord(const STradingSignal &s, const ENUM_QME
 //------------------------------------------------------------------//
 void CEngine::RecordDecision(const SDecision &d, const long cycle)
   {
+   m_lastDecision = d.symbol + " " + QmeSideName(d.side) +
+                    " verdict=" + IntegerToString((int)d.verdict) +
+                    " score=" + QmeFmt(d.score,1) +
+                    " reason=" + QmeRejectName(d.reason) +
+                    (StringLen(d.note)>0 ? " " + d.note : "");
    SReplayFrame f;
    QmeReplayFrameClear(f);
    f.cycle = cycle;
@@ -641,6 +649,8 @@ bool CEngine::HandleExecution(const SDecision &d, CSymbolRuntime &rt)
    m_execStats.RecordAttempt(d.plan.symbol);
    if(!m_gateway.Execute(d.plan, rt.spec, m_cfg, res))
      {
+      m_lastDecision = d.plan.symbol + " " + QmeSideName(d.plan.side) +
+                       " execution=" + QmeRejectName(res.reject) + " " + res.comment;
       m_execStats.RecordReject(d.plan.symbol);
       m_errors++;
       if(res.state == QME_EXEC_UNKNOWN_STATE || StringFind(res.comment, "pre-send checkpoint failed:") == 0)
@@ -656,6 +666,8 @@ bool CEngine::HandleExecution(const SDecision &d, CSymbolRuntime &rt)
      }
 
    m_trades++;
+   m_lastDecision = d.plan.symbol + " " + QmeSideName(d.plan.side) +
+                    " execution=confirmed ticket=" + IntegerToString((long)res.positionTicket);
    m_execStats.RecordFill(d.plan.symbol, res.filledVolume > 0.0 ? res.filledVolume : d.plan.volume);
    const bool tracked = TrackingAfterExecution(d.plan, res);
    if(!tracked)
@@ -715,6 +727,7 @@ bool CEngine::Cycle(const bool force, string &note)
                     QME_LOG_ERROR);
       m_dispatch.Dispatch(m_bus);
       note = "account refresh failed";
+      m_profiler.End(pCycle);
       m_inCycle = false;
       return(false);
      }
@@ -722,6 +735,7 @@ bool CEngine::Cycle(const bool force, string &note)
    if(!m_scheduler.ScanDue(TimeCurrent()))
      {
       note = "scan not due";
+      m_profiler.End(pCycle);
       m_inCycle = false;
       return(true);
      }
@@ -736,6 +750,7 @@ bool CEngine::Cycle(const bool force, string &note)
                     QME_LOG_ERROR);
       m_dispatch.Dispatch(m_bus);
       note = "scan: " + scanNote;
+      m_profiler.End(pCycle);
       m_inCycle = false;
       return(false);
      }
@@ -787,7 +802,11 @@ bool CEngine::Cycle(const bool force, string &note)
       const int n = m_signals.Generate(rt.analysis[0], rt.analysis[1], rt.analysis[2],
                                        rt.analysis[3], rt.analysis[4], rt.zones, rt.spec, m_cfg,
                                        rt.quality, m_registry, sigs);
-      if(n <= 0) continue;
+      if(n <= 0)
+        {
+         m_lastDecision = rt.symbol + " signal pipeline: " + m_signals.LastOutcome();
+         continue;
+        }
 
       for(int k = 0; k < n; k++)
         {
@@ -901,6 +920,13 @@ void CEngine::OnTimer(void)
    m_positions.ReconcileWithBroker(m_cfg.In.magic);
    ManagePositions();
    MaintainSignals();
+
+   // Timer-driven scan ensures a multi-symbol engine keeps progressing even
+   // when the chart symbol is quiet. Cycle is throttled by the monotonic
+   // scheduler and independently checks every authorization/risk gate.
+   string cycleNote = "";
+   if(!Cycle(false, cycleNote) && StringLen(cycleNote) > 0)
+      QmeLogMsg(QME_LOG_WARN, "Engine", "timer cycle: " + cycleNote);
   }
 
 //------------------------------------------------------------------//
@@ -934,6 +960,8 @@ string CEngine::Status(void)
           " | " + m_risk.Describe() +
           " | " + m_gateway.Describe() +
           " | " + m_checkpoint.Describe() +
+          " | signals=" + m_signals.Stats() +
+          " | funnel=" + m_funnel.Summary() +
           (m_profiler.Enabled() ? " | " + m_profiler.Report() : ""));
   }
 

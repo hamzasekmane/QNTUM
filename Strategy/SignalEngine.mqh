@@ -49,6 +49,8 @@ private:
    long               m_entryFail;
    long               m_qualityFail;
    long               m_approved;
+   string             m_lastOutcome;
+   SCandidateRejectCounts m_lastCandidateRejects;
 
    bool               RegistryHasFingerprint(CSignalRegistry &registry, const string fp);
    int                BuildViews(const SMarketAnalysis &context, const SMarketAnalysis &bias,
@@ -69,6 +71,7 @@ public:
                               CSignalRegistry &registry, STradingSignal &out[]);
 
    string            Stats(void);
+   string            LastOutcome(void) { return(m_lastOutcome); }
   };
 
 //------------------------------------------------------------------//
@@ -85,6 +88,8 @@ CSignalEngine::CSignalEngine(void)
    m_entryFail = 0;
    m_qualityFail = 0;
    m_approved = 0;
+   m_lastOutcome = "no signal analysis yet";
+   QmeCandidateRejectCountsClear(m_lastCandidateRejects);
   }
 
 //------------------------------------------------------------------//
@@ -100,14 +105,9 @@ void CSignalEngine::Attach(CScoringEngine *scorer, CStrategyRegistry *strategies
 //------------------------------------------------------------------//
 bool CSignalEngine::RegistryHasFingerprint(CSignalRegistry &registry, const string fp)
   {
-   if(StringLen(fp) == 0) return(false);
-   for(int i = 0; i < registry.Count(); i++)
-     {
-      STradingSignal s;
-      if(!registry.At(i, s)) continue;
-      if(s.fingerprint == fp) return(true);
-     }
-   return(false);
+   // Rejected/expired records are not execution claims and may be reevaluated
+   // during the same setup bar. Registry itself defines live duplicate states.
+   return(registry.HasLiveFingerprint(fp));
   }
 
 //------------------------------------------------------------------//
@@ -196,22 +196,36 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
                             CSignalRegistry &registry, STradingSignal &out[])
   {
    ArrayResize(out, 0);
+   m_lastOutcome = "no signal candidate";
    if(m_scorer == NULL || m_strategies == NULL || m_lifecycle == NULL)
+     {
+      m_lastOutcome = "signal engine dependencies not attached";
       return(0);
+     }
 
    const string symbol = setup.symbol;
    const double price = setup.price;
    const double atr = setup.atr;
    const double point = spec.point;
-   if(price <= 0.0 || atr <= 0.0) return(0);
+   if(price <= 0.0 || atr <= 0.0)
+     { m_lastOutcome = "setup price/ATR unavailable"; return(0); }
 
    //--- 1. hypotheses per side (setup timeframe)
    SCandidateHypothesis hyps[];
+   SCandidateRejectCounts candidateRejects;
    const int nHyps = CCandidateCollector::Collect(context, structure, setup, zones, spec, cfg,
                                                   price, atr, point,
                                                   cfg.In.minRR * 1.1, 4.0,
-                                                  hyps, QME_MAX_CANDIDATES);
+                                                  hyps, QME_MAX_CANDIDATES,candidateRejects);
+   m_lastCandidateRejects = candidateRejects;
    m_hyps += nHyps;
+   if(nHyps == 0)
+      m_lastOutcome = "no candidates: zone=" + IntegerToString(candidateRejects.noZone) +
+                      " sweepGate=" + IntegerToString(candidateRejects.sweepNotConfirmed) +
+                      " breakoutGate=" + IntegerToString(candidateRejects.breakoutNotConfirmed) +
+                      " entry=" + IntegerToString(candidateRejects.invalidEntry) +
+                      " rr=" + IntegerToString(candidateRejects.rrRejected) +
+                      " setupStructure=" + IntegerToString(candidateRejects.noSetupStructure);
 
    //--- 2. one candidate per side
    SMergedCandidate merged[];
@@ -222,12 +236,14 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
      {
       const string fp = QmeFingerprint(symbol, merged[i].cand.side, merged[i].cand.tf,
                                        (long)merged[i].cand.zoneId, setup.barTime);
-      if(RegistryHasFingerprint(registry, fp)) continue;
+      if(RegistryHasFingerprint(registry, fp))
+        { m_lastOutcome = "live/unresolved fingerprint blocks duplicate"; continue; }
       if(m_dedup != NULL && m_dedup.IsDuplicate(fp, cfg.In.cooldownSecPerSymbol, TimeCurrent()))
-         continue;
+        { m_lastOutcome = "fingerprint cooldown active"; continue; }
 
       const string playbook = m_strategies.PlaybookFor(merged[i]);
-      if(!m_strategies.IsEnabled(playbook)) continue;
+      if(!m_strategies.IsEnabled(playbook))
+        { m_lastOutcome = "playbook disabled: " + playbook; continue; }
 
       //--- 3. confluence
       STfView views[];
@@ -280,6 +296,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
       if(!verdict.ok)
         {
          m_setupFail++;
+         m_lastOutcome = "setup rejected: " + QmeRejectName(verdict.reason) + " " + verdict.note;
          m_lifecycle.Transition(sig, QME_SIG_REJECTED, verdict.reason,
                                 verdict.note + " playbook=" + playbook, sig.updated);
          registry.Update(sig);
@@ -294,6 +311,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
          m_entryFail++;
          SScoreInput sc = merged[i].score;
          QmeScoreInputSet(sc, QME_F_ENTRY_CONFIRM, 0.0);
+         m_lastOutcome = "entry rejected: " + QmeRejectName(conf2.reason) + " " + conf2.note;
          m_lifecycle.Transition(sig, QME_SIG_REJECTED, conf2.reason,
                                 "entry not confirmed: " + conf2.note, sig.updated);
          registry.Update(sig);
@@ -319,6 +337,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
       if(finalScore < cfg.In.minScore)
         {
          m_qualityFail++;
+         m_lastOutcome = "score rejected: " + QmeFmt(finalScore,1) + " < " + QmeFmt(cfg.In.minScore,1);
          m_lifecycle.Transition(sig, QME_SIG_REJECTED, QME_REJ_LOW_SCORE,
                                 "score " + QmeFmt(finalScore, 1) + " < " +
                                 QmeFmt(cfg.In.minScore, 1), sig.updated);
@@ -332,6 +351,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
       if(!CSignalTypes::Validate(sig, cfg.In.minRR, vReject, vWhy))
         {
          m_qualityFail++;
+         m_lastOutcome = "signal invalid: " + QmeRejectName(vReject) + " " + vWhy;
          m_lifecycle.Transition(sig, QME_SIG_REJECTED, vReject, vWhy, sig.updated);
          registry.Update(sig);
          continue;
@@ -346,6 +366,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
       if(!q.acceptable)
         {
          m_qualityFail++;
+         m_lastOutcome = "signal quality rejected: " + QmeRejectName(q.reason) + " " + q.note;
          m_lifecycle.Transition(sig, QME_SIG_REJECTED, q.reason, q.note, sig.updated);
          registry.Update(sig);
          continue;
@@ -358,6 +379,8 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
       registry.Update(sig);
       m_strategies.RecordSignal(playbook);
       m_approved++;
+      m_lastOutcome = "signal approved: " + symbol + " " + QmeSideName(sig.side) +
+                      " score=" + QmeFmt(finalScore,1);
 
       const int n = ArraySize(out);
       ArrayResize(out, n + 1);
@@ -374,7 +397,12 @@ string CSignalEngine::Stats(void)
           " setupFail=" + IntegerToString((int)m_setupFail) +
           " entryFail=" + IntegerToString((int)m_entryFail) +
           " qualityFail=" + IntegerToString((int)m_qualityFail) +
-          " approved=" + IntegerToString((int)m_approved));
+          " approved=" + IntegerToString((int)m_approved) +
+          " lastCandidateGates(zone=" + IntegerToString(m_lastCandidateRejects.noZone) +
+          ",sweep=" + IntegerToString(m_lastCandidateRejects.sweepNotConfirmed) +
+          ",breakout=" + IntegerToString(m_lastCandidateRejects.breakoutNotConfirmed) +
+          ",entry=" + IntegerToString(m_lastCandidateRejects.invalidEntry) +
+          ",rr=" + IntegerToString(m_lastCandidateRejects.rrRejected) + ")");
   }
 
 #endif // __QME_STRATEGY_SIGNALENGINE_MQH__

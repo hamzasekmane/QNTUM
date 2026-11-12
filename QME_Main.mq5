@@ -74,7 +74,7 @@ input string            InpNewsBlackoutWindows = "";             // GMT windows 
 input group "=== 7. Strategy ==="
 input double            InpMinScore            = 55.0;           // Minimum score (0..100)
 input double            InpMinConfluence       = 0.40;           // Minimum MTF confluence
-input bool              InpRequireHtfAlignment = true;           // Require HTF alignment
+input bool              InpRequireHtfAlignment = false;          // HTF alignment contributes to confluence; not a hard veto
 input int               InpMaxSignalsPerDay    = 12;             // Max signals per day
 input int               InpSignalExpiryMinutes = 240;            // Signal expiry (minutes)
 input int               InpCooldownSecPerSymbol = 900;           // Per-symbol cooldown (s)
@@ -212,7 +212,7 @@ void RefreshDashboard(void)
    g_dashData.persistence = g_engine.History().Describe();
    g_dashData.performance = g_perf.Describe();
    g_dashData.alerts = g_alerts.Describe();
-   g_dashData.lastDecision = g_engine.Status();
+   g_dashData.lastDecision = g_engine.LastDecision();
    g_dashData.footer = "InpMagicNumber " + IntegerToString((long)InpMagicNumber) +
                        "  errors " + IntegerToString((int)g_errors.Total()) +
                        "  v" + QME_BUILD_TAG;

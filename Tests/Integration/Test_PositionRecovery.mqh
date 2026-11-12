@@ -42,6 +42,25 @@ int RunPositionRecoveryTests(void)
    g_kit.Check(store.Find(101, got), "position 101 found");
    g_kit.CheckEqual((long)got.signalId, 42, "signal id preserved");
 
+   // Blocking NEW entries due to analysis mode must not clear existing state.
+   SInputs blockedIn;
+   QmeInputsDefaults(blockedIn);
+   CConfig blockedCfg;
+   string blockedErr = "";
+   SAccountContext blockedAcc;
+   QmeAccountClear(blockedAcc);
+   blockedAcc.mode=QME_ACC_DEMO; blockedAcc.valid=true; blockedAcc.connected=true;
+   blockedAcc.equity=10000.0; blockedAcc.balance=10000.0; blockedAcc.freeMargin=10000.0;
+   if(blockedCfg.Init(blockedIn,blockedErr))
+     {
+      CRuntimeController blockedCtl;
+      blockedCtl.Init(blockedCfg,blockedAcc);
+      string blockedWhy="";
+      g_kit.Check(!blockedCtl.MayTrade(blockedCfg,blockedAcc,true,blockedWhy),"analysis mode blocks new entries");
+      g_kit.Check(store.Find(101,got) && !got.closed,"existing tracked position remains available while new entries are blocked");
+     }
+   else g_kit.Check(false,"analysis-mode controller config: "+blockedErr);
+
    //--- serialise / restore
    const string blob = store.Serialize();
    CPositionStateStore restored;

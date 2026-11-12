@@ -82,6 +82,26 @@ int RunLifecycleTests(void)
    g_kit.CheckEqual((long)s.state, (long)QME_SIG_DETECTED, "state unchanged after refusal");
    g_kit.Check(lc.Refused() >= 1, "refusal is counted");
 
+   // A terminal rejection may be reevaluated within the same setup bar, but
+   // any live or unresolved fingerprint remains reserved against duplicates.
+   CSignalRegistry reg;
+   STradingSignal prior = LifecycleSignal();
+   ENUM_QME_REJECT addReason = QME_REJ_NONE;
+   string addWhy = "";
+   g_kit.Check(reg.Add(prior, addReason, addWhy), "first fingerprint record added");
+   g_kit.Check(reg.HasLiveFingerprint(prior.fingerprint), "live signal reserves its fingerprint");
+   CSignalLifecycle reevaluate;
+   reevaluate.Transition(prior, QME_SIG_EVALUATING, QME_REJ_NONE, "test", TimeCurrent());
+   reevaluate.Transition(prior, QME_SIG_REJECTED, QME_REJ_LOW_SCORE, "temporary rejection", TimeCurrent());
+   reg.Update(prior);
+   g_kit.Check(!reg.HasLiveFingerprint(prior.fingerprint), "rejected signal releases fingerprint for reevaluation");
+   STradingSignal retry = LifecycleSignal();
+   retry.id = 1002;
+   g_kit.Check(reg.Add(retry, addReason, addWhy), "same setup fingerprint can be reevaluated after rejection");
+   STradingSignal duplicate = LifecycleSignal();
+   duplicate.id = 1003;
+   g_kit.Check(!reg.Add(duplicate, addReason, addWhy), "live fingerprint still blocks duplicate signal");
+
    g_kit.Check(lc.Transition(s, QME_SIG_EVALUATING, QME_REJ_NONE, "ok", TimeCurrent()),
                "transition() accepts DETECTED -> EVALUATING");
    g_kit.CheckEqual((long)s.state, (long)QME_SIG_EVALUATING, "state updated");

@@ -181,6 +181,25 @@ def test_event_dispatcher_reinitializes_sink_registration():
     return check("event sink registrations reset across EA reinitialization", ok)
 
 
+def test_pipeline_regressions():
+    engine = read("Runtime/Engine.mqh")
+    scanner = read("Runtime/Scanner.mqh")
+    signals = read("Strategy/SignalEngine.mqh")
+    gateway = read("Execution/ExecutionGateway.mqh")
+    controller = read("Runtime/RuntimeController.mqh")
+    dashboard = read("QME_Main.mq5")
+    ok = ("Cycle(false, cycleNote)" in engine
+          and "m_profiler.End(pCycle);" in engine
+          and "m_lastDataValid" in scanner
+          and "return(registry.HasLiveFingerprint(fp));" in signals
+          and "res.state == QME_EXEC_UNKNOWN_STATE) && m_dedup != NULL" in gateway
+          and "authorization recheck failed" in controller
+          and "resume denied pending authorization reinitialization" in controller
+          and "g_engine.LastDecision()" in dashboard
+          and "input bool              InpRequireHtfAlignment = false" in dashboard)
+    return check("timer scan, rejected fingerprint retry, auth revocation, unknown intent and real last-decision diagnostics", ok)
+
+
 def test_mql5_test_programs_paired():
     programs = sorted(ROOT.glob("Tests/*/*.mq5"))
     ok = check("21 MQL5 test programs present", len(programs) == 21,
@@ -204,6 +223,7 @@ ALL_TESTS = [
     test_analysis_only_precedence,
     test_pipeline_data_and_topdown_regressions,
     test_event_dispatcher_reinitializes_sink_registration,
+    test_pipeline_regressions,
     test_mql5_test_programs_paired,
 ]
 

@@ -55,6 +55,26 @@ struct SCandidateHypothesis
    string            note;
   };
 
+struct SCandidateRejectCounts
+  {
+   int invalidMarketData;
+   int noSetupStructure;
+   int sideDisabled;
+   int breakoutNotConfirmed;
+   int sweepNotConfirmed;
+   int noZone;
+   int invalidEntry;
+   int rrRejected;
+   int candidateValid;
+  };
+
+void QmeCandidateRejectCountsClear(SCandidateRejectCounts &c)
+  {
+   c.invalidMarketData=0; c.noSetupStructure=0; c.sideDisabled=0;
+   c.breakoutNotConfirmed=0; c.sweepNotConfirmed=0; c.noZone=0;
+   c.invalidEntry=0; c.rrRejected=0; c.candidateValid=0;
+  }
+
 class CCandidateCollector
   {
 public:
@@ -70,7 +90,8 @@ public:
                              const SSymbolSpec &spec, const CConfig &cfg,
                              const double price, const double atr, const double point,
                              const double rrTarget, const double maxStopAtr,
-                             SCandidateHypothesis &out[], const int maxOut);
+                             SCandidateHypothesis &out[], const int maxOut,
+                             SCandidateRejectCounts &rejects);
   };
 
 //------------------------------------------------------------------//
@@ -231,17 +252,20 @@ int CCandidateCollector::Collect(const SMarketAnalysis &bias, const SMarketAnaly
                                  const SSymbolSpec &spec, const CConfig &cfg,
                                  const double price, const double atr, const double point,
                                  const double rrTarget, const double maxStopAtr,
-                                 SCandidateHypothesis &out[], const int maxOut)
+                                 SCandidateHypothesis &out[], const int maxOut,
+                                 SCandidateRejectCounts &rejects)
   {
    ArrayResize(out, 0);
-   if(price <= 0.0 || atr <= 0.0 || !setup.structureValid) return(0);
+   QmeCandidateRejectCountsClear(rejects);
+   if(price <= 0.0 || atr <= 0.0) { rejects.invalidMarketData++; return(0); }
+   if(!setup.structureValid) { rejects.noSetupStructure++; return(0); }
 
    const ENUM_QME_SIDE sides[2] = {QME_SIDE_BUY, QME_SIDE_SELL};
    for(int s = 0; s < 2 && ArraySize(out) < maxOut; s++)
      {
       const ENUM_QME_SIDE side = sides[s];
-      if(side == QME_SIDE_BUY && !cfg.In.allowBuy)  continue;
-      if(side == QME_SIDE_SELL && !cfg.In.allowSell) continue;
+      if(side == QME_SIDE_BUY && !cfg.In.allowBuy)  { rejects.sideDisabled++; continue; }
+      if(side == QME_SIDE_SELL && !cfg.In.allowSell) { rejects.sideDisabled++; continue; }
 
       // Do not trade a liquidity raid merely because its wick closed back
       // inside the pool. Require a later closed-bar MSS/CHoCH in the reversal
@@ -251,7 +275,8 @@ int CCandidateCollector::Collect(const SMarketAnalysis &bias, const SMarketAnaly
          const bool bosAligned = setup.bos.valid &&
             ((side == QME_SIDE_BUY && setup.bos.event == QME_STRUCT_BOS_UP) ||
              (side == QME_SIDE_SELL && setup.bos.event == QME_STRUCT_BOS_DOWN));
-         if(side != setup.liquidityEventSide || !bosAligned) continue;
+         if(side != setup.liquidityEventSide || !bosAligned)
+           { rejects.breakoutNotConfirmed++; continue; }
         }
       if(setup.sweep.valid && setup.sweep.tradeSide == side)
         {
@@ -260,17 +285,17 @@ int CCandidateCollector::Collect(const SMarketAnalysis &bias, const SMarketAnaly
              (side == QME_SIDE_SELL && setup.mss.event == QME_STRUCT_MSS_DOWN));
          if(!mssAligned || setup.mss.barIndex < 0 ||
             setup.sweep.barIndex < 0 || setup.mss.barIndex >= setup.sweep.barIndex)
-            continue;
+           { rejects.sweepNotConfirmed++; continue; }
         }
 
       STradingZone zone;
       if(!zones.BestZone(side, price, atr, setup.barTime, 2.0, zone))
-         continue;
+        { rejects.noZone++; continue; }
 
       SEntrySpec entry = CEntryRig::FromZone(zone, side, price, atr, point, spec,
                                              MathMax(rrTarget, 2.0), maxStopAtr);
       if(!entry.valid)
-         continue;
+        { rejects.invalidEntry++; continue; }
 
       // Reversal geometry is anchored to the confirmed raid wick. The first
       // opposite-side liquidity pool is the target; if it cannot pay 2R,
@@ -283,7 +308,8 @@ int CCandidateCollector::Collect(const SMarketAnalysis &bias, const SMarketAnaly
          entry.stop = CSymbolSpecifications::NormalizePrice(spec, entry.stop);
          entry.stopDistance = MathAbs(entry.entry - entry.stop);
          if(entry.stopDistance <= 0.0 ||
-            (maxStopAtr > 0.0 && entry.stopDistance > maxStopAtr * atr)) continue;
+            (maxStopAtr > 0.0 && entry.stopDistance > maxStopAtr * atr))
+           { rejects.invalidEntry++; continue; }
          double nearest = 0.0;
          double nearestDistance = DBL_MAX;
          for(int li=0; li<setup.liquidity.map.count; li++)
@@ -297,17 +323,17 @@ int CCandidateCollector::Collect(const SMarketAnalysis &bias, const SMarketAnaly
             const double d=MathAbs(level.price-entry.entry);
             if(d < nearestDistance) { nearestDistance=d; nearest=level.price; }
            }
-         if(nearest <= 0.0) continue;
+         if(nearest <= 0.0) { rejects.rrRejected++; continue; }
          entry.target1 = CSymbolSpecifications::NormalizePrice(spec, nearest);
          entry.target2 = entry.target1;
          entry.rr = MathAbs(entry.target1-entry.entry)/entry.stopDistance;
-         if(entry.rr + QME_EPSILON < 2.0) continue;
+         if(entry.rr + QME_EPSILON < 2.0) { rejects.rrRejected++; continue; }
         }
-      if(entry.rr + QME_EPSILON < 2.0) continue;
+      if(entry.rr + QME_EPSILON < 2.0) { rejects.rrRejected++; continue; }
       string why = "";
       if(!CEntryTypes::Validate(entry, spec,
                                 CSymbolSpecifications::MinStopDistance(spec), why))
-         continue;
+        { rejects.invalidEntry++; continue; }
 
       SCandidateHypothesis h;
       h.symbol = setup.symbol;
@@ -334,6 +360,7 @@ int CCandidateCollector::Collect(const SMarketAnalysis &bias, const SMarketAnaly
       const int n = ArraySize(out);
       ArrayResize(out, n + 1);
       out[n] = h;
+      rejects.candidateValid++;
      }
    return(ArraySize(out));
   }

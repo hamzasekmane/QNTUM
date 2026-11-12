@@ -31,9 +31,7 @@ public:
 //------------------------------------------------------------------//
 double CExposureManager::Notional(const string symbol, const double volume, const double price)
   {
-   const double contract = SymbolInfoDouble(symbol, SYMBOL_TRADE_CONTRACT_SIZE);
-   if(contract <= 0.0 || volume <= 0.0 || price <= 0.0) return(0.0);
-   return(volume * contract * price);
+   return(QmeAccountCurrencyNotional(symbol, volume, price));
   }
 
 //------------------------------------------------------------------//

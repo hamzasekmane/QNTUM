@@ -62,6 +62,16 @@ int RunRiskTests(void)
    g_kit.Begin("Unit/Test_Risk");
    const SSymbolSpec spec = RiskSpec();
 
+   // Account-currency exposure uses broker tick value/tick size, not raw
+   // contract*price in an arbitrary quote currency.
+   const double eurMinNotional = QmeAccountCurrencyNotionalFromTick(0.01,1.10,1.0,0.00001);
+   const double xauMinNotional = QmeAccountCurrencyNotionalFromTick(0.01,4038.0,1.0,0.01);
+   g_kit.CheckClose(eurMinNotional,1100.0,0.01,"EURUSD 0.01-lot notional converts to account currency");
+   g_kit.CheckClose(xauMinNotional,4038.0,0.01,"XAUUSD 0.01-lot notional converts to account currency");
+   g_kit.Check(xauMinNotional > 0.05*6620.0,"configured 5% symbol cap is below XAU minimum-lot notional at 6,620 equity");
+   g_kit.Check(QmeAccountCurrencyNotionalFromTick(0.01,100.0,0.0,0.01)==0.0,
+               "missing tick valuation fails closed");
+
    //--- sizing audit against THIS mock spec (the derivation, not a guess):
    //--- tickValue 1.0 per tickSize 0.00001 => 100000 USD per 1.00 of price
    //--- per lot. A 20-pip stop (0.0020) therefore loses 200 USD per lot, so
