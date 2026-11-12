@@ -165,6 +165,15 @@ ulong QmeHashString(const string s)
    return(h);
   }
 
+//--- isolate durable state by account, broker server, and EA magic.
+//--- Server name is hashed to keep the common-file path portable.
+string QmeScopedStateName(const long login,const string server,const ulong magic)
+  {
+   return("qme_"+IntegerToString(login)+"_"+
+          IntegerToString((long)QmeHashString(server))+"_"+
+          IntegerToString((long)magic)+".txt");
+  }
+
 //--- build a fingerprint: same market fact => same key => no duplicate order
 string QmeFingerprint(const string symbol, const ENUM_QME_SIDE side,
                       const ENUM_TIMEFRAMES tf, const long zoneId,

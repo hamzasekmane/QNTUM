@@ -118,72 +118,45 @@ int CSignalEngine::BuildViews(const SMarketAnalysis &context, const SMarketAnaly
   {
    ArrayResize(views, 0);
 
-   //--- context timeframe (normally D1): strongest top-down directional input
-   if(context.bias.valid)
-     {
-      STfView v;
-      v.tf = context.tf;
-      v.direction = context.bias.side;
-      v.strength = context.bias.score;
-      const int n = ArraySize(views);
-      ArrayResize(views, n + 1);
-      views[n] = v;
-     }
+   // Keep the configured five-timeframe denominator stable. A missing or
+   // invalid evidence view contributes zero agreement at its own timeframe
+   // weight instead of silently disappearing and inflating confluence.
+   STfView v;
+   v.tf=context.tf; v.direction=QME_SIDE_NONE; v.strength=0.0;
+   if(context.bias.valid) { v.direction=context.bias.side; v.strength=context.bias.score; }
+   ArrayResize(views,ArraySize(views)+1); views[ArraySize(views)-1]=v;
 
-   //--- bias timeframe (normally H4)
-   if(bias.bias.valid)
-     {
-      STfView v;
-      v.tf = bias.tf;
-      v.direction = bias.bias.side;
-      v.strength = bias.bias.score;
-      const int n = ArraySize(views);
-      ArrayResize(views, n + 1);
-      views[n] = v;
-     }
+   v.tf=bias.tf; v.direction=QME_SIDE_NONE; v.strength=0.0;
+   if(bias.bias.valid) { v.direction=bias.bias.side; v.strength=bias.bias.score; }
+   ArrayResize(views,ArraySize(views)+1); views[ArraySize(views)-1]=v;
 
-   //--- structure timeframe
-   if(structure.structure.valid)
+   v.tf=structure.tf; v.direction=QME_SIDE_NONE; v.strength=0.0;
+   if(structure.structure.valid && structure.trend.valid)
      {
-      STfView v;
-      v.tf = structure.tf;
-      v.direction = QME_SIDE_NONE;
-      if(structure.structure.trend == QME_TREND_UP)   v.direction = QME_SIDE_BUY;
-      if(structure.structure.trend == QME_TREND_DOWN) v.direction = QME_SIDE_SELL;
-      v.strength = 0.5 + 0.5 * (structure.trend.valid ? structure.trend.strength : 0.5);
-      const int n = ArraySize(views);
-      ArrayResize(views, n + 1);
-      views[n] = v;
+      if(structure.structure.trend==QME_TREND_UP) v.direction=QME_SIDE_BUY;
+      if(structure.structure.trend==QME_TREND_DOWN) v.direction=QME_SIDE_SELL;
+      v.strength=QmeClamp(0.5+0.5*structure.trend.strength,0.0,1.0);
      }
+   ArrayResize(views,ArraySize(views)+1); views[ArraySize(views)-1]=v;
 
-   //--- setup timeframe
+   v.tf=setup.tf; v.direction=QME_SIDE_NONE; v.strength=0.0;
    if(setup.trend.valid)
      {
-      STfView v;
-      v.tf = setup.tf;
-      v.direction = QME_SIDE_NONE;
-      if(setup.trend.trend == QME_TREND_UP)   v.direction = QME_SIDE_BUY;
-      if(setup.trend.trend == QME_TREND_DOWN) v.direction = QME_SIDE_SELL;
-      v.strength = setup.trend.strength;
-      const int n = ArraySize(views);
-      ArrayResize(views, n + 1);
-      views[n] = v;
+      if(setup.trend.trend==QME_TREND_UP) v.direction=QME_SIDE_BUY;
+      if(setup.trend.trend==QME_TREND_DOWN) v.direction=QME_SIDE_SELL;
+      v.strength=setup.trend.strength;
      }
+   ArrayResize(views,ArraySize(views)+1); views[ArraySize(views)-1]=v;
 
-   //--- entry timeframe: momentum agreement, weighted low
+   v.tf=entryTf.tf; v.direction=QME_SIDE_NONE; v.strength=0.0;
    if(entryTf.momentum.valid)
      {
-      STfView v;
-      v.tf = entryTf.tf;
-      v.direction = entryTf.momentum.direction;
-      v.strength = QmeClamp(MathAbs(entryTf.momentum.value), 0.0, 1.0);
-      const int n = ArraySize(views);
-      ArrayResize(views, n + 1);
-      views[n] = v;
+      v.direction=entryTf.momentum.direction;
+      v.strength=QmeClamp(MathAbs(entryTf.momentum.value),0.0,1.0);
      }
+   ArrayResize(views,ArraySize(views)+1); views[ArraySize(views)-1]=v;
 
-   //--- silence never confirms: a missing view counts against confluence
-   if(side == QME_SIDE_NONE) ArrayResize(views, 0);
+   if(side==QME_SIDE_NONE) ArrayResize(views,0);
    return(ArraySize(views));
   }
 
