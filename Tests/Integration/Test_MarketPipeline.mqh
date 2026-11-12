@@ -21,6 +21,43 @@ int RunMarketPipelineTest(void)
    g_kit.Check(!CTickProcessor::IsTickTimeFresh(0, 1300, 300), "missing tick time rejected");
    g_kit.Check(!CTickProcessor::IsTickTimeFresh(1000, 0, 300), "missing server time rejected");
 
+   // Deterministic broker-session fixtures for the reported M15 interval.
+   // Weekly times used here are deliberately explicit; runtime uses each
+   // broker's SymbolInfoSessionQuote schedule rather than these test values.
+   const int m15=900;
+   const datetime fxOlder=StringToTime("2026.11.06 23:45");
+   const datetime fxNewer=StringToTime("2026.11.09 00:00");
+   const datetime xauNewer=StringToTime("2026.11.09 01:00");
+   bool fxOpenBar=false;
+   for(datetime bt=fxOlder+m15;bt<fxNewer;bt+=m15)
+     {
+      MqlDateTime bd; TimeToStruct(bt,bd);
+      SQuoteSessionWindow w[]; ArrayResize(w,0);
+      // Friday quote close at 23:45; no weekend quote windows in fixture.
+      if(bd.day_of_week==5) { ArrayResize(w,1); w[0].startSecond=0; w[0].endSecond=85500; }
+      if(QmeBarOverlapsQuoteWindows(bt,m15,bd.day_of_week,w,ArraySize(w))) fxOpenBar=true;
+     }
+   g_kit.Check(!fxOpenBar,"reported FX Friday-Monday 173700s interval is closed in explicit weekend schedule");
+   bool xauOpenBar=false;
+   for(datetime bt=fxOlder+m15;bt<xauNewer;bt+=m15)
+     {
+      MqlDateTime bd; TimeToStruct(bt,bd);
+      SQuoteSessionWindow w[]; ArrayResize(w,0);
+      // Gold Sunday/Monday opening is 01:00 in this explicit broker fixture.
+      if(bd.day_of_week==5) { ArrayResize(w,1); w[0].startSecond=0; w[0].endSecond=85500; }
+      if(bd.day_of_week==1) { ArrayResize(w,1); w[0].startSecond=3600; w[0].endSecond=86400; }
+      if(QmeBarOverlapsQuoteWindows(bt,m15,bd.day_of_week,w,ArraySize(w))) xauOpenBar=true;
+     }
+   g_kit.Check(!xauOpenBar,"reported gold gap is closed until its configured Monday 01:00 quote open");
+   SQuoteSessionWindow weekday[]; ArrayResize(weekday,1);
+   weekday[0].startSecond=0; weekday[0].endSecond=86400;
+   const datetime weekdayMissing=StringToTime("2026.11.10 10:15");
+   g_kit.Check(QmeBarOverlapsQuoteWindows(weekdayMissing,m15,2,weekday,1),
+               "missing M15 interval during open quote session is detected");
+   SQuoteSessionWindow unavailable[]; ArrayResize(unavailable,0);
+   g_kit.Check(!QmeBarOverlapsQuoteWindows(weekdayMissing,m15,2,unavailable,0),
+               "empty session data cannot certify a bar as scheduled or safe");
+
    // Failed refreshes must never retain a previous valid snapshot/analysis.
    CSymbolRuntime invalidation;
    invalidation.symbol = "test";

@@ -13,6 +13,7 @@
 #include "../Core/Types.mqh"
 #include "../Core/Utils.mqh"
 #include "TimeframeContext.mqh"
+#include "QuoteSessions.mqh"
 
 //--- quality problem flags (stored in SDataQuality::flags)
 enum ENUM_QME_DQ_FLAG
@@ -89,29 +90,32 @@ bool CDataQualityGuard::Evaluate(CTimeframeContext &ctx, const double curSpreadP
       out.note = "newest bar is " + QmeFmt(out.barAgeSeconds / 60.0, 1) + " min old";
      }
 
-   //--- gaps: informational until they dominate the window
+   //--- Validate every large timestamp gap against the broker QUOTE schedule.
+   //--- A bar is missing only if at least one expected bar overlaps an open
+   //--- quote session; unknown schedules fail closed.
    if(series.Gaps() > 0)
      {
-      out.missingBars = (series.WorstGap() > out.closedBars / 4);
-      if(out.missingBars)
+      const int step=PeriodSeconds(ctx.Timeframe());
+      for(int gi=1;gi<series.Count();gi++)
         {
-         out.flags |= QME_DQ_FLAG_MISSING;
-         int worstAt = -1;
-         long worstSeconds = 0;
-         for(int gi=1; gi<series.Count(); gi++)
+         const datetime newer=series.TimeAt(gi-1);
+         const datetime older=series.TimeAt(gi);
+         const long elapsed=(long)newer-(long)older;
+         if(step<=0 || elapsed<=(long)step*3) continue;
+         string sessionReason="";
+         const bool covered=QmeGapCoveredByClosedQuoteSessions(series.Symbol(),older,newer,step,sessionReason);
+         if(!covered)
            {
-            const long delta=(long)series.TimeAt(gi-1)-(long)series.TimeAt(gi);
-            if(delta>worstSeconds) { worstSeconds=delta; worstAt=gi; }
+            out.missingBars=true;
+            out.flags|=QME_DQ_FLAG_MISSING;
+            out.note="missing-session-bars symbol="+series.Symbol()+
+                     " tf="+QmeTimeframeName(ctx.Timeframe())+
+                     " newer="+TimeToString(newer,TIME_DATE|TIME_MINUTES)+
+                     " older="+TimeToString(older,TIME_DATE|TIME_MINUTES)+
+                     " elapsedSec="+IntegerToString(elapsed)+" reason="+sessionReason;
+            QmeLogMsg(QME_LOG_WARN,"DataQuality",out.note);
+            break;
            }
-         const datetime newer=(worstAt>0 ? series.TimeAt(worstAt-1) : 0);
-         const datetime older=(worstAt>0 ? series.TimeAt(worstAt) : 0);
-         out.note = "missing-session-bars reason=unclassified symbol=" + series.Symbol() +
-                    " tf=" + QmeTimeframeName(ctx.Timeframe()) +
-                    " newer=" + TimeToString(newer,TIME_DATE|TIME_MINUTES) +
-                    " older=" + TimeToString(older,TIME_DATE|TIME_MINUTES) +
-                    " elapsedSec=" + IntegerToString(worstSeconds) +
-                    " expectedSession=unknown (broker session schedule not evaluated)";
-         QmeLogMsg(QME_LOG_WARN,"DataQuality",out.note);
         }
      }
 

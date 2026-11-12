@@ -181,6 +181,22 @@ def test_event_dispatcher_reinitializes_sink_registration():
     return check("event sink registrations reset across EA reinitialization", ok)
 
 
+def test_quote_session_gap_regressions():
+    sessions = read("Data/QuoteSessions.mqh")
+    quality = read("Data/DataQualityGuard.mqh")
+    suite = read("Tests/Integration/Test_MarketPipeline.mqh")
+    ok = ("SymbolInfoSessionQuote" in sessions
+          and "QmeGapCoveredByClosedQuoteSessions" in quality
+          and "fail closed" in sessions
+          and "SymbolInfoSessionQuote" in sessions
+          and "2026.11.06 23:45" in suite
+          and "2026.11.09 00:00" in suite
+          and "2026.11.09 01:00" in suite
+          and "missing M15 interval during open quote session" in suite
+          and "empty session data cannot certify" in suite)
+    return check("quote-session API and exact FX/gold/open-session regression fixtures", ok)
+
+
 def test_pipeline_regressions():
     engine = read("Runtime/Engine.mqh")
     scanner = read("Runtime/Scanner.mqh")
@@ -223,6 +239,7 @@ ALL_TESTS = [
     test_analysis_only_precedence,
     test_pipeline_data_and_topdown_regressions,
     test_event_dispatcher_reinitializes_sink_registration,
+    test_quote_session_gap_regressions,
     test_pipeline_regressions,
     test_mql5_test_programs_paired,
 ]
