@@ -310,7 +310,7 @@ int OnInit(void)
    //--- 5. timers
    EventSetTimer(1);
 
-   Print(QME_TAG, " READY. ", g_engine.Controller().Describe());
+   Print(QME_TAG, " INITIALIZED (not an operational/trading-ready verdict). ", g_engine.Status());
    RefreshDashboard();
    return(INIT_SUCCEEDED);
   }

@@ -744,6 +744,18 @@ bool CEngine::Cycle(const bool force, string &note)
       return(false);
      }
 
+   // A failed recovery is a hard entry/scan gate. Timer maintenance above this
+   // method still reconciles and manages broker positions; transactions remain
+   // accepted by OnTransaction. Never let a healthy-looking scan proceed from
+   // an unknown persisted execution state.
+   if(m_recoveryBlocked)
+     {
+      note = "recovery blocked: entries disabled; operator reconciliation required";
+      m_profiler.End(pCycle);
+      m_inCycle = false;
+      return(false);
+     }
+
    if(!m_scheduler.ScanDue(TimeCurrent()))
      {
       note = "scan not due";
@@ -963,7 +975,9 @@ void CEngine::OnTransaction(const MqlTradeTransaction &trans, const MqlTradeRequ
 string CEngine::Status(void)
   {
    const SAccountContext acc = m_account.Snapshot();
-   return(m_controller.Describe() +
+   return(string("engine=") + (m_ready ? "initialized" : "not-initialized") +
+          " recovery=" + (m_recoveryBlocked ? "BLOCKED" : "clear") +
+          " | " + m_controller.Describe() +
           " | cycles=" + IntegerToString((int)m_cycles) +
           " trades=" + IntegerToString((int)m_trades) +
           " errors=" + IntegerToString((int)m_errors) +
