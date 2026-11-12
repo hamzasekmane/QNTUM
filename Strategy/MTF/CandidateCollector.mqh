@@ -26,6 +26,7 @@
 #include "../../Core/Types.mqh"
 #include "../../Core/Config.mqh"
 #include "../../Core/Utils.mqh"
+#include "../../Core/Logger.mqh"
 #include "../../Account/SymbolSpecifications.mqh"
 #include "../../Analysis/FactorCatalog.mqh"
 #include "../../Zones/ZoneEngine.mqh"
@@ -361,6 +362,15 @@ int CCandidateCollector::Collect(const SMarketAnalysis &bias, const SMarketAnaly
       ArrayResize(out, n + 1);
       out[n] = h;
       rejects.candidateValid++;
+      static datetime lastCandidateTrace=0;
+      const datetime traceNow=TimeCurrent();
+      if(traceNow-lastCandidateTrace>=30)
+        {
+         lastCandidateTrace=traceNow;
+         QmeLogMsg(QME_LOG_INFO,"CandidateCollect",h.symbol+" "+QmeSideName(h.side)+
+                   " tf="+QmeTimeframeName(h.tf)+" valid="+QmeBoolStr(h.valid)+
+                   " entryValid="+QmeBoolStr(h.entry.valid)+" zone="+IntegerToString((long)h.zone.id));
+        }
      }
    return(ArraySize(out));
   }

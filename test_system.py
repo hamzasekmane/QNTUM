@@ -193,8 +193,26 @@ def test_quote_session_gap_regressions():
           and "2026.11.09 00:00" in suite
           and "2026.11.09 01:00" in suite
           and "missing M15 interval during open quote session" in suite
+          and "2026.04.03 00:00" in suite
+          and "broker quote-session schedule unavailable; fail closed" in sessions
           and "empty session data cannot certify" in suite)
     return check("quote-session API and exact FX/gold/open-session regression fixtures", ok)
+
+
+def test_candidate_validity_contract_and_repeat_suppression():
+    cluster = read("Strategy/MTF/CandidateClusterer.mqh")
+    setup = read("Strategy/SetupEngine.mqh")
+    signal_engine = read("Strategy/SignalEngine.mqh")
+    registry = read("Strategy/SignalRegistry.mqh")
+    suite = read("Tests/Integration/Test_MtfPipeline.mqh")
+    ok = ("mc.valid = mc.cand.valid;" in cluster
+          and "if(!mc.valid)" in setup
+          and "HasInternalRejectFingerprint(fp)" in signal_engine
+          and "m_signals[i].reject==QME_REJ_INTERNAL" in registry
+          and "collector validity flags set on usable hypothesis" in suite
+          and "valid merged evidence reaches scoring" in suite
+          and "invalid hypothesis is not emitted" in suite)
+    return check("candidate collector/merge/setup validity contract and identical INTERNAL rejection suppression", ok)
 
 
 def test_pipeline_regressions():
@@ -240,6 +258,7 @@ ALL_TESTS = [
     test_pipeline_data_and_topdown_regressions,
     test_event_dispatcher_reinitializes_sink_registration,
     test_quote_session_gap_regressions,
+    test_candidate_validity_contract_and_repeat_suppression,
     test_pipeline_regressions,
     test_mql5_test_programs_paired,
 ]

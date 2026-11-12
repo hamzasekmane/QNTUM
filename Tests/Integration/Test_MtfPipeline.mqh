@@ -84,6 +84,64 @@ int RunMtfPipelineTest(void)
    //--- geometry contract of the clusterer, stated explicitly
    g_kit.Check(m <= 2, "at most one candidate per side survives the merge");
 
+   // End-to-end candidate-validity contract: real collector output -> merge
+   // -> setup gate -> scoring. No order is built or sent by this fixture.
+   MqlTick tick;
+   const double livePrice=(SymbolInfoTick(_Symbol,tick) && tick.bid>0.0 && tick.ask>0.0) ?
+                          (tick.bid+tick.ask)*0.5 : 0.0;
+   if(livePrice<=0.0)
+      g_kit.Skip("candidate contract fixture requires a current symbol quote");
+   else
+     {
+      setup.price=livePrice; setup.atr=livePrice*0.001; setup.structureValid=true;
+      setup.barTime=TimeCurrent()-PeriodSeconds(in.tfSetup);
+      setup.bos.valid=true; setup.bos.event=QME_STRUCT_BOS_UP; setup.bos.strength=1.0;
+      STradingZone zone; QmeZoneClear(zone);
+      zone.id=991337; zone.symbol=_Symbol; zone.tf=in.tfSetup; zone.side=QME_SIDE_BUY;
+      zone.source=QME_ZONE_SRC_FVG; zone.upper=livePrice+setup.atr*0.05;
+      zone.lower=livePrice-setup.atr*0.05; zone.created=TimeCurrent();
+      zone.lastTouched=TimeCurrent(); zone.expires=TimeCurrent()+3600;
+      zone.strength=0.9; zone.confidence=0.9; zone.state=QME_ZSTAT_FRESH;
+      zone.factorMask=CFactorCatalog::Bit(QME_F_FVG);
+      g_kit.Check(zones.Board().AddOrMerge(zone,60.0),"fixture FVG zone inserted");
+      SCandidateHypothesis produced[]; SCandidateRejectCounts producedRejects;
+      const int producedN=CCandidateCollector::Collect(bias,structure,setup,zones,spec,cfg,
+                       livePrice,setup.atr,spec.point,cfg.In.minRR*1.1,4.0,
+                       produced,QME_MAX_CANDIDATES,producedRejects);
+      g_kit.Check(producedN>0,"collector emits valid hypothesis from active fixture zone");
+      if(producedN>0)
+        {
+         g_kit.Check(produced[0].valid && produced[0].entry.valid,"collector validity flags set on usable hypothesis");
+         SMergedCandidate mergedValid[];
+         const int mergedN=CCandidateClusterer::Merge(produced,producedN,mergedValid,2);
+         g_kit.Check(mergedN>0,"valid collector hypothesis survives clusterer");
+         if(mergedN>0)
+           {
+            g_kit.Check(mergedValid[0].cand.valid && mergedValid[0].valid,
+                        "clusterer preserves both candidate validity fields");
+            SConfluenceResult conf; ZeroMemory(conf); conf.valid=true; conf.score=1.0;
+            conf.htfAligned=true; conf.side=QME_SIDE_BUY;
+            SDataQuality good; QmeDataQualityClear(good); good.ok=true;
+            const SSetupVerdict verdict=CSetupEngine::Evaluate(mergedValid[0],conf,cfg,good);
+            g_kit.Check(verdict.reason!=QME_REJ_INTERNAL,"setup gate does not reject valid merged candidate as INTERNAL");
+            g_kit.Check(verdict.ok,"valid fixture reaches beyond setup validity and confirmation gates");
+            CScoringEngine scoreEngine; SFactorBreakdown breakdown;
+            const double scoreValue=scoreEngine.Score(mergedValid[0].score,breakdown);
+            g_kit.Check(scoreValue>0.0 && breakdown.applied>0,"valid merged evidence reaches scoring");
+           }
+         produced[0].valid=false;
+         SMergedCandidate invalidMerged[];
+         g_kit.CheckEqual(CCandidateClusterer::Merge(produced,producedN,invalidMerged,2),0,
+                          "invalid hypothesis is not emitted as trade candidate");
+         SMergedCandidate invalidCandidate; QmeCandidateClear(invalidCandidate.cand);
+         invalidCandidate.valid=false;
+         SConfluenceResult invalidConf; ZeroMemory(invalidConf);
+         const SSetupVerdict invalidVerdict=CSetupEngine::Evaluate(invalidCandidate,invalidConf,cfg,good);
+         g_kit.Check(!invalidVerdict.ok && invalidVerdict.reason==QME_REJ_INTERNAL,
+                     "SetupEngine continues to reject genuinely invalid merged candidate");
+        }
+     }
+
    zones.Shutdown();
    return(g_kit.End());
   }

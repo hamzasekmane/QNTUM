@@ -17,6 +17,7 @@
 
 #include "../../Core/Types.mqh"
 #include "../../Core/Utils.mqh"
+#include "../../Core/Logger.mqh"
 #include "../../Intelligence/ScoringEngine.mqh"
 #include "CandidateCollector.mqh"
 
@@ -141,11 +142,37 @@ int CCandidateClusterer::Merge(const SCandidateHypothesis &hyps[], const int cou
       mc.cand.takeProfit = mc.entry.target1;
       mc.cand.rr = mc.entry.rr;
       mc.cand.created = hyps[primary].created;
-      mc.cand.valid = true;
+      // The setup gate consumes SMergedCandidate.valid (not cand.valid).
+      // Derive both flags from the producer contract instead of marking the
+      // transport record valid unconditionally.
+      mc.cand.valid = (hyps[primary].valid && hyps[primary].entry.valid &&
+                       mc.entry.valid && mc.cand.entry > 0.0 &&
+                       mc.cand.stopLoss > 0.0 && mc.cand.takeProfit > 0.0);
+      mc.valid = mc.cand.valid;
+      if(!mc.valid)
+        {
+         QmeLogMsg(QME_LOG_WARN,"CandidateMerge","discard invalid merged candidate side="+
+                   QmeSideName(side)+" hypValid="+QmeBoolStr(hyps[primary].valid)+
+                   " entryValid="+QmeBoolStr(mc.entry.valid));
+         continue;
+        }
 
       const int n = ArraySize(out);
       ArrayResize(out, n + 1);
       out[n] = mc;
+      static datetime lastMergeTrace=0;
+      const datetime traceNow=TimeCurrent();
+      if(traceNow-lastMergeTrace>=30)
+        {
+         lastMergeTrace=traceNow;
+         int availableFactors=0;
+         for(int fi=0;fi<(int)QME_F_COUNT;fi++) if(mc.score.available[fi]) availableFactors++;
+         QmeLogMsg(QME_LOG_INFO,"CandidateMerge",mc.cand.symbol+" "+QmeSideName(side)+
+                   " hypotheses="+IntegerToString(mc.timeframes)+
+                   " candidateValid="+QmeBoolStr(mc.cand.valid)+
+                   " mergedValid="+QmeBoolStr(mc.valid)+
+                   " evidenceFactors="+IntegerToString(availableFactors));
+        }
      }
    return(ArraySize(out));
   }
