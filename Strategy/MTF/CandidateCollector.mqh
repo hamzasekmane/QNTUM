@@ -84,13 +84,13 @@ void CCandidateCollector::FillEvidence(const SMarketAnalysis &bias,
    QmeScoreInputClear(h.score);
 
    //--- HTF bias
-   if(bias.valid && bias.bias.valid && bias.bias.side == side)
+   if(bias.bias.valid && bias.bias.side == side)
       QmeScoreInputSet(h.score, QME_F_HTF_BIAS, bias.bias.score);
-   else if(bias.valid && bias.bias.valid)
+   else if(bias.bias.valid)
       QmeScoreInputSet(h.score, QME_F_HTF_BIAS, 0.0);
 
    //--- structure (from the structure timeframe)
-   if(structure.valid && structure.structure.valid)
+   if(structure.structure.valid)
      {
       const bool aligned = (side == QME_SIDE_BUY && structure.structure.trend == QME_TREND_UP) ||
                            (side == QME_SIDE_SELL && structure.structure.trend == QME_TREND_DOWN);
@@ -107,7 +107,7 @@ void CCandidateCollector::FillEvidence(const SMarketAnalysis &bias,
      }
 
    //--- liquidity on the correct side of the price
-   if(structure.valid && structure.liquidity.valid)
+   if(structure.liquidity.valid)
      {
       const double dist = (side == QME_SIDE_BUY) ?
                           setup.location.distToSellSideAtr : setup.location.distToBuySideAtr;
@@ -234,7 +234,7 @@ int CCandidateCollector::Collect(const SMarketAnalysis &bias, const SMarketAnaly
                                  SCandidateHypothesis &out[], const int maxOut)
   {
    ArrayResize(out, 0);
-   if(!setup.valid || price <= 0.0 || atr <= 0.0) return(0);
+   if(price <= 0.0 || atr <= 0.0 || !setup.structureValid) return(0);
 
    const ENUM_QME_SIDE sides[2] = {QME_SIDE_BUY, QME_SIDE_SELL};
    for(int s = 0; s < 2 && ArraySize(out) < maxOut; s++)

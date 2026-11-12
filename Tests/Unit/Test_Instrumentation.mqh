@@ -104,6 +104,9 @@ int RunInstrumentationTests(void)
    g_kit.Check(!dispatch.AddSink(GetPointer(sink), "test"), "a duplicate name is refused");
    g_kit.Check(!dispatch.AddSink(NULL, "null"), "a null sink is refused");
    g_kit.Check(dispatch.SubscribeAll("test"), "the sink subscribes to everything");
+   dispatch.Reset();
+   g_kit.CheckEqual(dispatch.SinkCount(), 0, "reset clears stale sink registrations");
+   g_kit.Check(dispatch.AddSink(GetPointer(sink), "test"), "reset permits clean re-registration");
    g_kit.CheckEqual(dispatch.SinkCount(), 1, "one sink is registered");
 
    bus.Publish(QME_EVT_ERROR, "EURUSD", 3, 0.0, "boom", QME_LOG_ERROR);

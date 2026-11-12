@@ -25,6 +25,7 @@ private:
 
 public:
                      CEventDispatcher(void);
+   void              Reset(void);
    bool              AddSink(IQmeEventSink *sink, const string name);
    bool              Subscribe(const string name, const ENUM_QME_EVENT type);
    bool              SubscribeAll(const string name);
@@ -39,6 +40,12 @@ public:
 
 //------------------------------------------------------------------//
 CEventDispatcher::CEventDispatcher(void)
+  {
+   Reset();
+  }
+
+//------------------------------------------------------------------//
+void CEventDispatcher::Reset(void)
   {
    m_sinkCount = 0;
    m_delivered = 0;

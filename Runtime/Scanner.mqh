@@ -301,26 +301,37 @@ bool CScanner::Scan(const bool force, string &note)
 //------------------------------------------------------------------//
 bool CScanner::RefreshSymbol(CSymbolRuntime &rt, const datetime gmtNow, const long gmtOffset)
   {
+   const string previousNote = rt.note;
    // Never reuse any part of the previous scan after a failed refresh.
    rt.InvalidateAnalysis();
    const double spreadPoints = (double)SymbolInfoInteger(rt.symbol, SYMBOL_SPREAD);
 
    bool anyReady = false;
+   string tfBlock[QME_TF_SLOTS];
    for(int i = 0; i < QME_TF_SLOTS; i++)
      {
       rt.tfReady[i] = false;
-      if(!rt.ctx[i].Refresh()) continue;
-      if(!rt.ctx[i].Ready()) continue;
-      if(!rt.series[i].Refresh()) continue;
+      tfBlock[i] = "";
+      if(!rt.ctx[i].Refresh())
+        { tfBlock[i] = rt.ctx[i].LastError(); continue; }
+      if(!rt.ctx[i].Ready())
+        { tfBlock[i] = "context not ready"; continue; }
+      if(!rt.series[i].Refresh())
+        { tfBlock[i] = rt.series[i].LastError(); continue; }
 
-      if(!BuildAnalysis(rt, i, gmtNow, gmtOffset, spreadPoints)) continue;
+      if(!BuildAnalysis(rt, i, gmtNow, gmtOffset, spreadPoints))
+        { tfBlock[i] = rt.note; continue; }
       rt.tfReady[i] = anyReady = true;
      }
 
    if(!anyReady)
      {
       rt.note = "no timeframe ready";
-      QmeLogMsg(QME_LOG_WARN, "Scanner", rt.symbol + ": " + rt.note);
+      for(int i=0; i<QME_TF_SLOTS; i++)
+         rt.note += " | " + QmeTfName(rt.ctx[i].Timeframe()) + ":" +
+                    (StringLen(tfBlock[i])>0 ? tfBlock[i] : "analysis unavailable");
+      if(rt.note != previousNote)
+         QmeLogMsg(QME_LOG_WARN, "Scanner", rt.symbol + ": " + rt.note);
       return(false);
      }
 
@@ -362,22 +373,39 @@ bool CScanner::RefreshSymbol(CSymbolRuntime &rt, const datetime gmtNow, const lo
    s.momentum = rt.analysis[entry].momentum.value;
    s.structureValid = rt.analysis[entry].structureValid;
    s.liquidityValid = rt.analysis[entry].liquidityValid;
-   // All four timeframes consumed by Generate() must be freshly available.
+   // All five configured timeframes must have fresh closed bars; individual
+   // structure/liquidity modules may be unavailable without vetoing all data.
    s.dataValid = q.ok;
-   for(int i = 1; i < QME_TF_SLOTS; i++)
+   string dataBlock = "";
+   if(!q.ok) dataBlock += QmeTfName(rt.ctx[entry].Timeframe()) + ":" + CDataQualityGuard::Describe(q) + ";";
+   for(int i = 0; i < QME_TF_SLOTS; i++)
      {
       SDataQuality tfQuality;
-      if(!rt.tfReady[i] || !rt.analysis[i].valid ||
-         !CDataQualityGuard::Evaluate(rt.ctx[i], spreadPoints, tfQuality))
+      if(!rt.tfReady[i])
+        {
          s.dataValid = false;
+         dataBlock += QmeTfName(rt.ctx[i].Timeframe()) + ":not ready (" + tfBlock[i] + ");";
+         continue;
+        }
+      if(!CDataQualityGuard::Evaluate(rt.ctx[i], spreadPoints, tfQuality))
+        {
+         s.dataValid = false;
+         dataBlock += QmeTfName(rt.ctx[i].Timeframe()) + ":" + CDataQualityGuard::Describe(tfQuality) + ";";
+        }
      }
    CTickProcessor *ticks = m_data.Ticks(rt.symbol);
-   if(ticks == NULL || !ticks.IsFresh(300)) s.dataValid = false;
+   if(ticks == NULL || !ticks.IsFresh(300))
+     {
+      s.dataValid = false;
+      dataBlock += "tick:missing or stale;";
+     }
    s.quality = q;
    s.zoneCount = rt.zones.ActiveCount(now);
    rt.snapshot = s;
    rt.lastBarTime = rt.series[entry].LastClosedBarTime();
-   rt.note = "ok";
+   rt.note = s.dataValid ? "ok" : "data blocked " + dataBlock;
+   if(!s.dataValid && rt.note != previousNote)
+      QmeLogMsg(QME_LOG_WARN, "Scanner", rt.symbol + ": " + rt.note);
    return(true);
   }
 
@@ -528,9 +556,12 @@ bool CScanner::BuildAnalysis(CSymbolRuntime &rt, const int slot, const datetime 
    if(haveLevel)
       a.reaction = CReactionEngine::AtLevel(*sr, lvl.price, a.atr, scanBars, 0.25, 0.30);
 
+   // A timeframe is data-ready when its closed bars and core price inputs are
+   // sound. Missing structure/liquidity/bias is absence of evidence, not a
+   // reason to mark every other timeframe's market data invalid.
    a.valid = a.structureValid && a.liquidityValid && a.trend.valid && a.bias.valid;
    rt.analysis[slot] = a;
-   return(a.valid || a.structureValid);
+   return(true);
   }
 
 //------------------------------------------------------------------//
@@ -539,11 +570,15 @@ string CScanner::Describe(void)
    int ready = 0;
    for(int i = 0; i < m_count; i++)
       if(m_rt[i] != NULL && m_rt[i].snapshot.dataValid) ready++;
+   string blocked = "";
+   for(int i=0; i<m_count && i<4; i++)
+      if(m_rt[i] != NULL && !m_rt[i].snapshot.dataValid && StringLen(m_rt[i].note)>0)
+         blocked += " [" + m_rt[i].symbol + ":" + m_rt[i].note + "]";
    return("scanner symbols=" + IntegerToString(m_count) +
           " valid=" + IntegerToString(ready) +
           " scans=" + IntegerToString((int)m_scans) +
           " failures=" + IntegerToString((int)m_failures) +
-          " session=" + QmeSessionName(m_session.session));
+          " session=" + QmeSessionName(m_session.session) + blocked);
   }
 
 #endif // __QME_RUNTIME_SCANNER_MQH__

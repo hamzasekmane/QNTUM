@@ -190,6 +190,10 @@ bool CEngine::Init(const SInputs &in, string &err)
      }
 
    m_clock.Refresh();
+   // CEngine is a global EA object and may be re-initialised after input
+   // changes/recompilation without reconstructing its dispatcher. Drop stale
+   // sink registrations before binding the current ledger instance.
+   m_dispatch.Reset();
    m_ledger.Init(QME_MAX_EVENT_QUEUE, m_cfg.In.logCycleDetail);
    m_bus.Reset();
    if(!m_dispatch.AddSink(GetPointer(m_ledger), "ledger"))
@@ -749,7 +753,11 @@ bool CEngine::Cycle(const bool force, string &note)
      {
       CSymbolRuntime *rt = m_scanner.At(i);
       if(rt == NULL) continue;
-      if(!rt.snapshot.dataValid) continue;
+      if(!rt.snapshot.dataValid)
+        {
+         m_funnel.Drop(m_funnel.Stage("data"), rt.note);
+         continue;
+        }
       if(m_scheduler.IsCooling(rt.symbol, TimeCurrent())) continue;
 
       m_funnel.Pass(m_funnel.Stage("symbol"));
@@ -776,8 +784,8 @@ bool CEngine::Cycle(const bool force, string &note)
         }
 
       STradingSignal sigs[];
-      const int n = m_signals.Generate(rt.analysis[1], rt.analysis[2], rt.analysis[3],
-                                       rt.analysis[4], rt.zones, rt.spec, m_cfg,
+      const int n = m_signals.Generate(rt.analysis[0], rt.analysis[1], rt.analysis[2],
+                                       rt.analysis[3], rt.analysis[4], rt.zones, rt.spec, m_cfg,
                                        rt.quality, m_registry, sigs);
       if(n <= 0) continue;
 

@@ -158,6 +158,29 @@ def test_analysis_only_precedence():
                  first >= 0 and "QME_REJ_DISABLED_BY_CONFIG" in src)
 
 
+def test_pipeline_data_and_topdown_regressions():
+    scanner = read("Runtime/Scanner.mqh")
+    config = read("Core/Config.mqh")
+    signal = read("Strategy/SignalEngine.mqh")
+    engine = read("Runtime/Engine.mqh")
+    ok = "!rt.analysis[i].valid" not in scanner
+    ok &= "return(true);" in scanner[scanner.find("bool CScanner::BuildAnalysis"):]
+    ok &= "in.requireHtfAlignment   = false;" in config
+    ok &= "Generate(rt.analysis[0], rt.analysis[1]" in engine
+    ok &= "context.bias.valid" in signal and "bias.bias.valid" in signal
+    return check("usable data is not vetoed by incomplete optional analysis; D1 top-down view wired", ok)
+
+
+def test_event_dispatcher_reinitializes_sink_registration():
+    dispatcher = read("Core/EventDispatcher.mqh")
+    engine = read("Runtime/Engine.mqh")
+    tests = read("Tests/Unit/Test_Instrumentation.mqh")
+    ok = ("void              Reset(void);" in dispatcher
+          and "m_dispatch.Reset();" in engine
+          and "reset permits clean re-registration" in tests)
+    return check("event sink registrations reset across EA reinitialization", ok)
+
+
 def test_mql5_test_programs_paired():
     programs = sorted(ROOT.glob("Tests/*/*.mq5"))
     ok = check("21 MQL5 test programs present", len(programs) == 21,
@@ -179,6 +202,8 @@ ALL_TESTS = [
     test_fvg_crash_regression_guard,
     test_executed_signals_cannot_expire,
     test_analysis_only_precedence,
+    test_pipeline_data_and_topdown_regressions,
+    test_event_dispatcher_reinitializes_sink_registration,
     test_mql5_test_programs_paired,
 ]
 
