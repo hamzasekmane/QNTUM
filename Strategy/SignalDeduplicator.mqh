@@ -19,9 +19,14 @@ private:
    string            m_fp[QME_MAX_FINGERPRINTS];
    datetime          m_time[QME_MAX_FINGERPRINTS];
    ulong             m_signalId[QME_MAX_FINGERPRINTS];
+   //--- rebuildable open-addressed index: 0=empty, -1=tombstone, else slot+1
+   int               m_hashIndex[1024];
    int               m_count;
    int               m_head;
    int               Find(const string fp);
+   bool              IndexInsert(const string fp, const int record);
+   void              IndexRemove(const string fp);
+   void              RebuildIndex(void);
 
 public:
                      CSignalDeduplicator(void) { Reset(); }
@@ -46,12 +51,88 @@ void CSignalDeduplicator::Reset(void)
       m_time[i] = 0;
       m_signalId[i] = 0;
      }
+   for(int i = 0; i < ArraySize(m_hashIndex); i++) m_hashIndex[i] = 0;
+  }
+
+bool CSignalDeduplicator::IndexInsert(const string fp, const int record)
+  {
+   if(StringLen(fp) == 0 || record < 0 || record >= m_count) return(false);
+   const int capacity = ArraySize(m_hashIndex);
+   int slot = (int)(QmeHashString(fp) % (ulong)capacity);
+   int firstTombstone = -1;
+   for(int probe = 0; probe < capacity; probe++)
+     {
+      const int entry = m_hashIndex[slot];
+      if(entry == 0)
+        {
+         const int target = (firstTombstone >= 0) ? firstTombstone : slot;
+         m_hashIndex[target] = record + 1;
+         return(true);
+        }
+      if(entry == -1)
+        {
+         if(firstTombstone < 0) firstTombstone = slot;
+        }
+      else
+        {
+         const int existing = entry - 1;
+         if(existing >= 0 && existing < m_count && m_fp[existing] == fp)
+           {
+            m_hashIndex[slot] = record + 1;
+            return(true);
+           }
+        }
+      slot = (slot + 1) % capacity;
+     }
+   if(firstTombstone >= 0)
+     {
+      m_hashIndex[firstTombstone] = record + 1;
+      return(true);
+     }
+   return(false);
+  }
+
+void CSignalDeduplicator::IndexRemove(const string fp)
+  {
+   if(StringLen(fp) == 0) return;
+   const int capacity = ArraySize(m_hashIndex);
+   int slot = (int)(QmeHashString(fp) % (ulong)capacity);
+   for(int probe = 0; probe < capacity; probe++)
+     {
+      const int entry = m_hashIndex[slot];
+      if(entry == 0) return;
+      if(entry > 0)
+        {
+         const int record = entry - 1;
+         if(record >= 0 && record < m_count && m_fp[record] == fp)
+           { m_hashIndex[slot] = -1; return; }
+        }
+      slot = (slot + 1) % capacity;
+     }
+  }
+
+void CSignalDeduplicator::RebuildIndex(void)
+  {
+   for(int i = 0; i < ArraySize(m_hashIndex); i++) m_hashIndex[i] = 0;
+   for(int i = 0; i < m_count; i++) IndexInsert(m_fp[i], i);
   }
 
 int CSignalDeduplicator::Find(const string fp)
   {
-   for(int i = 0; i < m_count; i++)
-      if(m_fp[i] == fp) return(i);
+   if(StringLen(fp) == 0) return(-1);
+   const int capacity = ArraySize(m_hashIndex);
+   int slot = (int)(QmeHashString(fp) % (ulong)capacity);
+   for(int probe = 0; probe < capacity; probe++)
+     {
+      const int entry = m_hashIndex[slot];
+      if(entry == 0) return(-1);
+      if(entry > 0)
+        {
+         const int record = entry - 1;
+         if(record >= 0 && record < m_count && m_fp[record] == fp) return(record);
+        }
+      slot = (slot + 1) % capacity;
+     }
    return(-1);
   }
 
@@ -79,17 +160,28 @@ bool CSignalDeduplicator::Register(const string fp, const ulong signalId, const 
      }
    if(m_count >= QME_MAX_FINGERPRINTS)
      {
-      //--- ring: overwrite the oldest slot
+      //--- ring: remove the evicted key from the secondary index, then reuse slot
+      IndexRemove(m_fp[m_head]);
       m_fp[m_head] = fp;
       m_time[m_head] = now;
       m_signalId[m_head] = signalId;
+      const bool indexed = IndexInsert(fp, m_head);
       m_head = (m_head + 1) % QME_MAX_FINGERPRINTS;
-      return(true);
+      return(indexed);
      }
-   m_fp[m_count] = fp;
-   m_time[m_count] = now;
-   m_signalId[m_count] = signalId;
+   const int slot = m_count;
+   m_fp[slot] = fp;
+   m_time[slot] = now;
+   m_signalId[slot] = signalId;
    m_count++;
+   if(!IndexInsert(fp, slot))
+     {
+      m_count--;
+      m_fp[slot] = "";
+      m_time[slot] = 0;
+      m_signalId[slot] = 0;
+      return(false);
+     }
    return(true);
   }
 
@@ -126,6 +218,7 @@ void CSignalDeduplicator::Prune(const int cooldownSeconds, const datetime now)
       m_time[i] = keptTime[i];
       m_signalId[i] = keptId[i];
      }
+   RebuildIndex();
   }
 
 //------------------------------------------------------------------//
@@ -186,6 +279,7 @@ bool CSignalDeduplicator::Deserialize(const string blob)
       m_signalId[i] = tmpId[i];
      }
    m_count = loaded;
+   RebuildIndex();
    return(true);
   }
 

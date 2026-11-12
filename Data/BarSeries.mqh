@@ -19,6 +19,7 @@
 #include "../Core/ErrorCodes.mqh"
 #include "../Core/HistoryGuard.mqh"
 #include "../Core/Logger.mqh"
+#include "../Core/Algorithms.mqh"
 
 class CBarSeries
   {
@@ -56,6 +57,9 @@ public:
 
    //--- shift 0 = newest closed bar
    bool              Get(const int shift, SCandle &out);
+   //--- exact closed-bar time lookup using descending-order binary search
+   bool              FindShiftByTime(const datetime time, int &shift);
+   bool              AtTime(const datetime time, SCandle &out);
    double            Open(const int shift)  { SCandle c; return(Get(shift, c) ? c.open  : 0.0); }
    double            High(const int shift)  { SCandle c; return(Get(shift, c) ? c.high  : 0.0); }
    double            Low(const int shift)   { SCandle c; return(Get(shift, c) ? c.low   : 0.0); }
@@ -211,6 +215,22 @@ bool CBarSeries::Get(const int shift, SCandle &out)
    if(shift < 0 || shift >= m_count) return(false);
    out = m_bars[shift];
    return(out.valid);
+  }
+
+//------------------------------------------------------------------//
+bool CBarSeries::FindShiftByTime(const datetime time, int &shift)
+  {
+   shift = -1;
+   if(!m_valid || !m_orderValid) return(false);
+   return(CQmeAlgorithms::FindBarTimeDescending(m_bars, m_count, time, shift));
+  }
+
+bool CBarSeries::AtTime(const datetime time, SCandle &out)
+  {
+   QmeCandleClear(out);
+   int shift = -1;
+   if(!FindShiftByTime(time, shift)) return(false);
+   return(Get(shift, out));
   }
 
 //------------------------------------------------------------------//
