@@ -294,13 +294,20 @@ bool CScanner::Scan(const bool force, string &note)
    const long offset = m_clock.ServerGmtOffset();
    int analysed = 0;
    int dataValid = 0;
+   string blockers = "";
    for(int i = 0; i < m_count; i++)
      {
       if(m_rt[i] == NULL) continue;
       if(RefreshSymbol(*m_rt[i], gmtNow, offset))
         {
-         analysed++;
-         if(m_rt[i].snapshot.dataValid) dataValid++;
+         if(m_rt[i].snapshot.dataValid)
+           { analysed++; dataValid++; }
+         else
+           {
+            for(int ti=0;ti<QME_TF_SLOTS;ti++)
+               blockers += m_rt[i].symbol+"/"+QmeTfName(m_rt[i].ctx[ti].Timeframe())+"="+
+                           (m_rt[i].tfReady[ti] ? "quality-block" : "not-ready")+";";
+           }
         }
      }
 
@@ -308,9 +315,10 @@ bool CScanner::Scan(const bool force, string &note)
    m_lastAnalysed = analysed;
    m_lastDataValid = dataValid;
    if(analysed < m_count || dataValid < m_count) m_failures++;
-   note = "analysed=" + IntegerToString(analysed) + "/" + IntegerToString(m_count) +
-          " dataValid=" + IntegerToString(dataValid) + "/" + IntegerToString(m_count);
-   return(analysed > 0);
+   note = "fullyValid=" + IntegerToString(dataValid) + "/" + IntegerToString(m_count) +
+          " reachedSignalStage=" + IntegerToString(dataValid) + "/" + IntegerToString(m_count) +
+          " blockers=" + blockers;
+   return(true); // refresh completed; zero fully-valid symbols is a measured outcome, not a refresh error
   }
 
 //------------------------------------------------------------------//

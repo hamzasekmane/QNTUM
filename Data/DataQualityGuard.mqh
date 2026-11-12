@@ -68,8 +68,13 @@ bool CDataQualityGuard::Evaluate(CTimeframeContext &ctx, const double curSpreadP
    //--- staleness: how old is the newest closed bar relative to the timeframe
    const datetime server = TimeTradeServer();
    const datetime lastBar = series.LastClosedBarTime();
-   out.barAgeSeconds = (lastBar > 0 && server > lastBar) ? (double)(server - lastBar) : 0.0;
-   const double periodSec = (double)PeriodSeconds(ctx.Timeframe());
+   const int periodInt = PeriodSeconds(ctx.Timeframe());
+   // CopyRates timestamps bars by OPEN time. Freshness must be measured from
+   // the expected close boundary, not from that opening timestamp.
+   const datetime closeBoundary = (lastBar > 0 && periodInt > 0 ? lastBar + periodInt : 0);
+   out.barAgeSeconds = (closeBoundary > 0 && server > closeBoundary) ?
+                       (double)(server - closeBoundary) : 0.0;
+   const double periodSec = (double)periodInt;
    if(lastBar <= 0 || server <= 0 || lastBar > server || periodSec <= 0.0)
      {
       out.stale = true;
@@ -91,7 +96,22 @@ bool CDataQualityGuard::Evaluate(CTimeframeContext &ctx, const double curSpreadP
       if(out.missingBars)
         {
          out.flags |= QME_DQ_FLAG_MISSING;
-         out.note = "worst gap " + IntegerToString(series.WorstGap()) + " bars";
+         int worstAt = -1;
+         long worstSeconds = 0;
+         for(int gi=1; gi<series.Count(); gi++)
+           {
+            const long delta=(long)series.TimeAt(gi-1)-(long)series.TimeAt(gi);
+            if(delta>worstSeconds) { worstSeconds=delta; worstAt=gi; }
+           }
+         const datetime newer=(worstAt>0 ? series.TimeAt(worstAt-1) : 0);
+         const datetime older=(worstAt>0 ? series.TimeAt(worstAt) : 0);
+         out.note = "missing-session-bars reason=unclassified symbol=" + series.Symbol() +
+                    " tf=" + QmeTimeframeName(ctx.Timeframe()) +
+                    " newer=" + TimeToString(newer,TIME_DATE|TIME_MINUTES) +
+                    " older=" + TimeToString(older,TIME_DATE|TIME_MINUTES) +
+                    " elapsedSec=" + IntegerToString(worstSeconds) +
+                    " expectedSession=unknown (broker session schedule not evaluated)";
+         QmeLogMsg(QME_LOG_WARN,"DataQuality",out.note);
         }
      }
 
