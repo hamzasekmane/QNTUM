@@ -58,7 +58,8 @@
 - **Dependencies:** dashboard, watchdog, HealthMonitor, signal gating.
 - **Correction proposal:** document and split counters/epochs; preserve strict per-symbol validity gates. Do not interpret `valid=4` alone as recovery healthy.
 - **Regression:** complete scan with mix of success/data-quality-block/not-ready; refresh failure; summary before any scan; verify each named count and scan epoch.
-- **Verification:** static trace; logs show `valid=4 scans=1 lastAnalysed=4 lastDataValid=4`, consistent for that scan but not proof across failure cases.
+- **Status after Phase 2 work:** corrected `lastAnalysed` to count each successful `RefreshSymbol`, while `lastDataValid` still counts only snapshots whose combined quality verdict is valid. Current `valid` remains a live snapshot count and can differ from last-scan values after invalidation; that distinction is now documented rather than hidden.
+- **Verification:** source-level regression and Python static suite pass; MQL scanner behavior not executable here. Status: **fixed but not verifiable here**.
 
 ### QME-AUD-06 — Per-symbol `tfReady` means analysis build succeeded, not raw data completeness
 - **Module/severity/evidence:** Data pipeline; MEDIUM; **CONFIRMED**.

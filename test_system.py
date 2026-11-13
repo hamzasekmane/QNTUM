@@ -285,6 +285,17 @@ def test_advanced_algorithm_integration_contract():
     return check("binary closed-bar time lookup and Welford monitoring integration have deterministic fixtures", ok)
 
 
+def test_scanner_counter_semantics():
+    scanner = read("Runtime/Scanner.mqh")
+    scan_body = scanner[scanner.find("bool CScanner::Scan"):scanner.find("bool CScanner::RefreshSymbol")]
+    ok = ("analysed++; // symbol refresh and analysis completed" in scan_body
+          and "if(m_rt[i].snapshot.dataValid)" in scan_body
+          and "dataValid++;" in scan_body
+          and "m_lastAnalysed = analysed;" in scan_body
+          and "m_lastDataValid = dataValid;" in scan_body)
+    return check("scanner separates completed analysis from fully data-valid symbol counts", ok)
+
+
 def test_recovery_preflight_regression():
     recovery = read("Persistence/StateRecovery.mqh")
     suite = read("Tests/Integration/Test_PositionRecovery.mqh")
@@ -327,6 +338,7 @@ ALL_TESTS = [
     test_release_audit_regressions,
     test_signal_deduplicator_hash_index_contract,
     test_advanced_algorithm_integration_contract,
+    test_scanner_counter_semantics,
     test_recovery_preflight_regression,
     test_mql5_test_programs_paired,
 ]
