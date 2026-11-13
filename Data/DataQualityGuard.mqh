@@ -26,6 +26,17 @@ enum ENUM_QME_DQ_FLAG
    QME_DQ_FLAG_CLOSED       = 32
   };
 
+// Older D1/W1 gaps are retained as historical data diagnostics, but only
+// recent higher-timeframe gaps can invalidate the current scanner snapshot.
+// This avoids permanent blocking on legitimate broker holiday closures while
+// preserving strict checks for recent gaps and every intraday timeframe.
+bool QmeGapWithinQualityWindow(const ENUM_TIMEFRAMES tf,const int olderSeriesIndex)
+  {
+   if(olderSeriesIndex<=0) return(false);
+   if(tf==PERIOD_D1 || tf==PERIOD_W1) return(olderSeriesIndex<=60);
+   return(true);
+  }
+
 class CDataQualityGuard
   {
 public:
@@ -98,6 +109,7 @@ bool CDataQualityGuard::Evaluate(CTimeframeContext &ctx, const double curSpreadP
       const int step=PeriodSeconds(ctx.Timeframe());
       for(int gi=1;gi<series.Count();gi++)
         {
+         if(!QmeGapWithinQualityWindow(ctx.Timeframe(),gi)) continue;
          const datetime newer=series.TimeAt(gi-1);
          const datetime older=series.TimeAt(gi);
          const long elapsed=(long)newer-(long)older;
