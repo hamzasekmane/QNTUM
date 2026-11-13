@@ -99,6 +99,54 @@ int RunPositionRecoveryTests(void)
    CPositionStateStore empty;
    g_kit.Check(!empty.Deserialize(""), "empty blob refused");
 
+   // Recovery must validate late sections before mutating any live state.
+   SAccountContext savedAccount;
+   QmeAccountClear(savedAccount);
+   savedAccount.equity=20000.0; savedAccount.balance=20000.0;
+   CAccountState savedState;
+   savedState.Init(savedAccount);
+   CPositionStateStore savedPositions;
+   CSignalHistoryStore savedHistory;
+   CSignalDeduplicator savedDedup;
+   CIdempotencyGuard savedIdem;
+   CRuntimeMemory savedMemory;
+   const string validState=CStateRecovery::Compose(savedState,savedPositions,savedHistory,
+                                                   savedDedup,savedIdem,savedMemory);
+
+   SAccountContext liveAccount;
+   QmeAccountClear(liveAccount);
+   liveAccount.equity=10000.0; liveAccount.balance=10000.0;
+   CAccountState liveState;
+   liveState.Init(liveAccount);
+   CPositionStateStore livePositions;
+   CSignalHistoryStore liveHistory;
+   CSignalDeduplicator liveDedup;
+   CIdempotencyGuard liveIdem;
+   CRuntimeMemory liveMemory;
+   SRecoveryReport goodRecovery=CStateRecovery::Apply(validState,liveState,livePositions,
+                                                       liveHistory,liveDedup,liveIdem,
+                                                       liveMemory,999001);
+   g_kit.Check(goodRecovery.loaded,"complete valid recovery applies successfully");
+   g_kit.CheckClose(liveState.DayStartEquity(),20000.0,1e-8,"valid recovery restores account baseline");
+
+   CAccountState unchangedState;
+   unchangedState.Init(liveAccount);
+   CPositionStateStore unchangedPositions;
+   g_kit.Check(unchangedPositions.Track(FakePosition(303,QME_SIDE_BUY)),"preexisting recovery target position seeded");
+   CSignalHistoryStore unchangedHistory;
+   CSignalDeduplicator unchangedDedup;
+   CIdempotencyGuard unchangedIdem;
+   CRuntimeMemory unchangedMemory;
+   string corruptState=validState;
+   StringReplace(corruptState,"[IDEM]\n","[IDEM]\nidem;broken\n");
+   SRecoveryReport badRecovery=CStateRecovery::Apply(corruptState,unchangedState,
+                                                      unchangedPositions,unchangedHistory,
+                                                      unchangedDedup,unchangedIdem,
+                                                      unchangedMemory,999001);
+   g_kit.Check(!badRecovery.loaded,"malformed late intent section blocks recovery");
+   g_kit.CheckClose(unchangedState.DayStartEquity(),10000.0,1e-8,"late failure leaves account baseline unchanged");
+   g_kit.CheckEqual(unchangedPositions.Count(),1,"late failure leaves tracked positions unchanged");
+
    return(g_kit.End());
   }
 

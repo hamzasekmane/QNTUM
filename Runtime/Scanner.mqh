@@ -300,8 +300,9 @@ bool CScanner::Scan(const bool force, string &note)
       if(m_rt[i] == NULL) continue;
       if(RefreshSymbol(*m_rt[i], gmtNow, offset))
         {
+         analysed++; // symbol refresh and analysis completed, independent of quality verdict
          if(m_rt[i].snapshot.dataValid)
-           { analysed++; dataValid++; }
+            dataValid++;
          else
            {
             for(int ti=0;ti<QME_TF_SLOTS;ti++)

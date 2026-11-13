@@ -1,0 +1,17 @@
+# QNTUM remediation plan — gated proposal only
+
+No fix has been applied. Phase 2 requires user approval by finding ID. Never remove/overwrite legacy state or bypass recovery, and retain the four safety defaults.
+
+| Order | Finding | Proposed work | Dependencies / risk | Verification gate |
+|---|---|---|---|---|
+| 1 | QME-AUD-04 | Establish running EX5/source/path provenance; collect exact filenames and metadata before touching state. This is an evidence task, not a code fix. | Prerequisite to interpreting persistence logs. Risk of changing/renaming state is prohibited; metadata-only inspection. | Match build hash/version and computed source path to terminal files; no file mutation. |
+| 2 | QME-AUD-01 | Operator reconciliation procedure for legacy state; no automatic import/reset. Decide only after broker positions/orders/deals/intents matched. | Depends on item 1 and account/server/magic verification; highest data-integrity risk. Do not code a bypass. | Operator records backup and broker reconciliation; still analysis-only until separately approved. |
+| 3 | QME-AUD-03 | **Implemented partial transactional preflight** in its own commit: all current section deserializers are exercised against isolated objects before applying to live stores. Remaining tolerant-row parsing requires a separate strict-parser design. | Depends on every store deserializer; high impact across persistence/account/positions/idempotency. Existing files are not touched. | Static checks pass; MQL regression fixture added but requires MetaEditor/MT5 before runtime verification. |
+| 4 | QME-AUD-02 | Bind payload to account/server/magic with schema evolution and pre-mutation validation. | Must be coordinated with item 3 and migration policy; existing files preserved. | matching identity passes; mismatches fail closed without mutation; old-version behavior explicitly tested. |
+| 5 | QME-AUD-05 | **Implemented** separate completed analysis count from data-valid count. The live `valid` field remains current snapshot state and can differ after failed refresh; do not treat it as a same-epoch counter. | Monitoring/output dependent; medium risk of changed operational interpretation, no market gate changes. | Static regression passes; mixed-success/refresh-failure behavior still needs MT5 test. |
+| 6 | QME-AUD-06 | Improve readiness terminology/diagnostic stages only if requested; preserve all quality gates. | Depends on agreed definitions. Low-to-medium risk; must not weaken data validity. | staged readiness fixtures and dashboard/log comparison. |
+| 7 | QME-AUD-07 | Add clock-delta telemetry and only change freshness rule if terminal evidence confirms clock-basis defect. | Terminal/broker-dependent; medium risk because tick freshness is a safety gate. | controlled test with zero/future/age boundary/server offset/disconnect; fail closed. |
+| 8 | QME-AUD-08 | Corrected misleading entry-only OrderManager comment; ownership/authorization audit remains open. Do not centralize until position-protection requirements are mapped. | High safety risk; position protection must remain active under recovery block. | Static comment/call-site check passes; simulated position and recovery-block tests still required. |
+
+## Scope exclusion
+No signal-threshold, spread, bar-count, recovery-lock, state-file, or trading-switch changes are proposed. Signal quality/performance work is separate from the observed recovery and validity symptoms.
