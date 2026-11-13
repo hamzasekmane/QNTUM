@@ -194,6 +194,9 @@ def test_quote_session_gap_regressions():
           and "2026.11.09 01:00" in suite
           and "missing M15 interval during open quote session" in suite
           and "2026.04.03 00:00" in suite
+          and "QmeGapWithinQualityWindow" in quality
+          and "historical D1 gap outside recent validation window" in suite
+          and "intraday gap validation remains strict" in suite
           and "broker quote-session schedule unavailable; fail closed" in sessions
           and "empty session data cannot certify" in suite)
     return check("quote-session API and exact FX/gold/open-session regression fixtures", ok)

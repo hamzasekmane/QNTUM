@@ -57,6 +57,12 @@ int RunMarketPipelineTest(void)
    const datetime goodFridayMissing=StringToTime("2026.04.03 00:00");
    g_kit.Check(QmeBarOverlapsQuoteWindows(goodFridayMissing,86400,5,weekday,1),
                "weekly Friday schedule considers exact Good Friday D1 interval open; do not whitelist without holiday evidence");
+   g_kit.Check(QmeGapWithinQualityWindow(PERIOD_D1,60),
+               "recent D1 gap remains subject to strict quote-session validation");
+   g_kit.Check(!QmeGapWithinQualityWindow(PERIOD_D1,61),
+               "historical D1 gap outside recent validation window cannot permanently block current data");
+   g_kit.Check(QmeGapWithinQualityWindow(PERIOD_M15,400),
+               "intraday gap validation remains strict across loaded history");
    SQuoteSessionWindow unavailable[]; ArrayResize(unavailable,0);
    g_kit.Check(!QmeBarOverlapsQuoteWindows(weekdayMissing,m15,2,unavailable,0),
                "empty session data cannot certify a bar as scheduled or safe");
