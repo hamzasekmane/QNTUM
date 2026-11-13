@@ -7,7 +7,10 @@ Python static tests/tools available. No MetaEditor, MT5 terminal, broker account
 
 | Test | Status | Actual result / what it verifies |
 |---|---|---|
-| `python3 test_system.py` | **Passed** | Exit 0; output: `TOTAL: 49/49 passed, 0 failed`; `RESULT: static level OK`; explicit warning says not MetaEditor compile/test proof. Checks entrypoint/source nonempty, three Python static heuristics, safety input defaults, source-string regressions, and MQL test presence/pairing. Most checks are source/string or file-presence checks, not behavior. |
+| `python3 test_system.py` (Phase 1 baseline) | **Passed** | Exit 0; output: `TOTAL: 49/49 passed, 0 failed`; `RESULT: static level OK`; explicit warning says not MetaEditor compile/test proof. Checks entrypoint/source nonempty, three Python static heuristics, safety input defaults, source-string regressions, and MQL test presence/pairing. Most checks are source/string or file-presence checks, not behavior. |
+| `python3 test_system.py` (after QME-AUD-03) | **Passed** | 50/50 passed, including new source-level assertion that recovery preflight precedes live mutation and that MQL late-failure fixture exists. Not behavioral MQL evidence. |
+| `python3 Tools/mql5check.py`, `mql5fields.py`, `mql5calls.py` (after QME-AUD-03) | **Passed** | 197 sources structurally scanned, no empty files; 0 suspicious field accesses; 0 arity mismatches. Heuristics only. |
+| `git diff --check` (after QME-AUD-03) | **Passed** | No whitespace errors. |
 | `python3 Tools/mql5check.py` | **Passed** | `scanned 197 files (197 implemented, 0 empty)`; `OK: no structural errors detected (this is NOT a compilation proof)`. Heuristic structural/include/type checks. |
 | `python3 Tools/mql5fields.py` | **Passed** | `0 suspicious member access(es); this is a heuristic, not a compiler`. Heuristic only. |
 | `python3 Tools/mql5calls.py` | **Passed** | `0 arity mismatch(es); this is a heuristic, not a compiler`. Heuristic only. |

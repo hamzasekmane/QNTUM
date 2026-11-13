@@ -35,7 +35,9 @@
 - **Dependencies:** recovered risk baseline and in-flight orders; blocked engine reduces immediate entry risk, but in-memory state remains partially restored and diagnostics can be misleading.
 - **Correction proposal:** parse/validate into isolated temporary state; apply only once all sections and invariants pass. Do not weaken recovery lock.
 - **Regression:** corrupt each section in turn; assert failure leaves every live state object byte-for-byte/logically unchanged.
-- **Verification:** static trace; runtime behavior needs MQL test.
+- **Status after Phase 2 work:** fixed in source by preflighting account, positions, history, dedup, idempotency and runtime-memory sections into isolated temporary objects before any live deserialize; malformed late sections that make a deserializer fail now reject before the live stores are changed. MQL regression added.
+- **Remaining limitation:** several legacy deserializers tolerate malformed rows if at least one valid row is present, so preflight does not prove strict whole-document semantic validation; no claim of complete corruption detection.
+- **Verification:** source-level regression and Python static checks pass; MQL regression not run because MetaEditor/MT5 unavailable. Status: **fixed but not verifiable here**.
 
 ### QME-AUD-04 — Filename in supplied log does not match current source naming
 - **Module/severity/evidence:** Build/deployment + Persistence; HIGH; **SUSPECTED** runtime binary/source mismatch.

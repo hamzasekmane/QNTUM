@@ -141,8 +141,55 @@ SRecoveryReport CStateRecovery::Apply(const string blob, CAccountState &state,
       prior = pos + StringLen(markers[i]);
      }
 
-   //--- account state (day equity, peak, streak)
+   //--- preflight every section into isolated objects before touching live state.
+   //--- A late failure (notably an invalid IDEM section) must not leave earlier
+   //--- account/position/history sections partially restored.
    const string acct = Section(blob, "ACCT");
+   string stagedAccountLine = acct;
+   StringTrimRight(stagedAccountLine);
+   CAccountState stagedState;
+   if(StringLen(stagedAccountLine) == 0 || !stagedState.Deserialize(stagedAccountLine))
+     {
+      r.note = "state ignored: account baseline missing or invalid";
+      return(r);
+     }
+   CPositionStateStore stagedPositions;
+   const string pos = Section(blob, "POS");
+   if(StringLen(pos) > 0 && !stagedPositions.Deserialize(pos))
+     {
+      r.note = "state ignored: invalid position records";
+      return(r);
+     }
+   CSignalHistoryStore stagedHistory;
+   const string sig = Section(blob, "SIG");
+   if(StringLen(sig) > 0 && !stagedHistory.Deserialize(sig))
+     {
+      r.note = "state ignored: invalid signal history";
+      return(r);
+     }
+   CSignalDeduplicator stagedDedup;
+   const string dd = Section(blob, "DEDUP");
+   if(StringLen(dd) > 0 && !stagedDedup.Deserialize(dd))
+     {
+      r.note = "state ignored: invalid deduplication records";
+      return(r);
+     }
+   CIdempotencyGuard stagedIdem;
+   const string idemBlob = Section(blob, "IDEM");
+   if(StringLen(idemBlob) > 0 && !stagedIdem.Deserialize(idemBlob))
+     {
+      r.note = "state ignored: invalid intent records";
+      return(r);
+     }
+   CRuntimeMemory stagedMemory;
+   const string mem = Section(blob, "MEM");
+   if(StringLen(mem) > 0 && !stagedMemory.Deserialize(mem))
+     {
+      r.note = "state ignored: invalid runtime memory";
+      return(r);
+     }
+
+   //--- account state (day equity, peak, streak)
    if(StringLen(acct) > 0)
      {
       string line = acct;
@@ -162,7 +209,6 @@ SRecoveryReport CStateRecovery::Apply(const string blob, CAccountState &state,
      }
 
    //--- positions
-   const string pos = Section(blob, "POS");
    if(StringLen(pos) > 0 && positions.Deserialize(pos))
      {
       r.positionsRestored = positions.OpenCount();
@@ -172,17 +218,14 @@ SRecoveryReport CStateRecovery::Apply(const string blob, CAccountState &state,
      }
 
    //--- signal history
-   const string sig = Section(blob, "SIG");
    if(StringLen(sig) > 0 && history.Deserialize(sig))
       r.signalsRestored = history.Count();
 
    //--- fingerprint cooldowns
-   const string dd = Section(blob, "DEDUP");
    if(StringLen(dd) > 0 && dedup.Deserialize(dd))
       r.fingerprintsRestored = dedup.Count();
 
    //--- executed intents
-   const string idemBlob = Section(blob, "IDEM");
    if(StringLen(idemBlob) > 0)
      {
       if(!idem.Deserialize(idemBlob))
@@ -194,7 +237,6 @@ SRecoveryReport CStateRecovery::Apply(const string blob, CAccountState &state,
      }
 
    //--- runtime counters
-   const string mem = Section(blob, "MEM");
    if(StringLen(mem) > 0 && memory.Deserialize(mem))
       r.countersRestored = memory.Count();
 

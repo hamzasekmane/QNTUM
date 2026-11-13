@@ -285,6 +285,19 @@ def test_advanced_algorithm_integration_contract():
     return check("binary closed-bar time lookup and Welford monitoring integration have deterministic fixtures", ok)
 
 
+def test_recovery_preflight_regression():
+    recovery = read("Persistence/StateRecovery.mqh")
+    suite = read("Tests/Integration/Test_PositionRecovery.mqh")
+    preflight = recovery.find("preflight every section into isolated objects")
+    live_restore = recovery.find("state.Deserialize(line)")
+    ok = (preflight >= 0 and live_restore > preflight
+          and "!stagedIdem.Deserialize(idemBlob)" in recovery
+          and "malformed late intent section blocks recovery" in suite
+          and "late failure leaves account baseline unchanged" in suite
+          and "late failure leaves tracked positions unchanged" in suite)
+    return check("recovery preflight precedes live mutation with late-failure regression fixture", ok)
+
+
 def test_mql5_test_programs_paired():
     programs = sorted(ROOT.glob("Tests/*/*.mq5"))
     ok = check("23 MQL5 test programs present", len(programs) == 23,
@@ -314,6 +327,7 @@ ALL_TESTS = [
     test_release_audit_regressions,
     test_signal_deduplicator_hash_index_contract,
     test_advanced_algorithm_integration_contract,
+    test_recovery_preflight_regression,
     test_mql5_test_programs_paired,
 ]
 
