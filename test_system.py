@@ -285,6 +285,15 @@ def test_advanced_algorithm_integration_contract():
     return check("binary closed-bar time lookup and Welford monitoring integration have deterministic fixtures", ok)
 
 
+def test_order_send_ownership_comment():
+    orders = read("Execution/OrderManager.mqh")
+    manager = read("Execution/TradeManager.mqh")
+    ok = ("only place that submits NEW entry orders" in orders
+          and "Position protection/close requests are handled by TradeManager" in orders
+          and "OrderSend(req, res)" in manager)
+    return check("entry OrderSend ownership distinguishes position-management requests", ok)
+
+
 def test_scanner_counter_semantics():
     scanner = read("Runtime/Scanner.mqh")
     scan_body = scanner[scanner.find("bool CScanner::Scan"):scanner.find("bool CScanner::RefreshSymbol")]
@@ -338,6 +347,7 @@ ALL_TESTS = [
     test_release_audit_regressions,
     test_signal_deduplicator_hash_index_contract,
     test_advanced_algorithm_integration_contract,
+    test_order_send_ownership_comment,
     test_scanner_counter_semantics,
     test_recovery_preflight_regression,
     test_mql5_test_programs_paired,

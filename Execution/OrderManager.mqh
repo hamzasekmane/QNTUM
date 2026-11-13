@@ -1,6 +1,7 @@
 //+------------------------------------------------------------------+
 //|                                         Execution/OrderManager    |
-//|  The only place that calls OrderSend().                              |
+//|  The only place that submits NEW entry orders with OrderSend().       |
+//|  Position protection/close requests are handled by TradeManager.      |
 //|                                                                   |
 //|  Responsibilities:                                                |
 //|   * send the request and measure the round trip;                     |

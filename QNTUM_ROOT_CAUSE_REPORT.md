@@ -90,9 +90,10 @@
 - **Expected:** comment/interface reflects all broker trade calls; management calls must remain available to protect positions while entries are blocked, but remain scoped to owned/reconciled positions and explicit controls.
 - **Root cause:** duplicated broker API responsibility/documentation. Static call graph shows `ManagePositions` and `CloseOppositePositions` invoke TradeManager; exact outer guards and ownership policy need full runtime testing; no basis to call it an unguarded new-entry bypass.
 - **Dependencies:** execution audit, position protection, emergency pause.
-- **Correction proposal:** first document/verify ownership and authorization invariants; if approved, centralize or accurately distinguish entry-vs-position-management APIs without suppressing protection.
-- **Regression:** mock calls proving every new entry traverses ExecutionGateway validations/idempotency/checkpoint; management only changes tracked owned position; analysis-only/recovery-blocked prevents entries but preserves allowed protection.
-- **Verification:** static call-site trace; no MT5 execution.
+- **Correction proposal:** document/verify ownership and authorization invariants; centralize only if subsequently justified, without suppressing protection.
+- **Phase 2 status:** corrected the misleading OrderManager comment to distinguish new-entry submission from TradeManager position-protection/close requests. No execution paths or behavior changed. The authorization/ownership invariants remain open pending deeper terminal validation.
+- **Regression:** static assertion checks the corrected contract and confirms TradeManager still contains management OrderSend calls. Full mock/MT5 call-path behavior remains unverified.
+- **Verification:** static checks pass; no MT5 execution. Finding remains **open (documentation subissue clarified)**.
 
 ## Runtime symptoms from prior user logs
 - 11:58 excerpt: deinit reason 3; no trades/exec sends; reinit detected legacy state, then `FAULT` and `recovery=BLOCKED`; `signal-preview=OFF`; stale health alert. This is consistent with AUD-01, not proof that state is safe to discard.
