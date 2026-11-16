@@ -151,6 +151,7 @@ bool CDecisionEngine::Decide(const STradingSignal &s, const SSymbolSpec &spec,
       out.reason = QME_REJ_LOW_SCORE;
       out.note = "score " + QmeFmt(s.score, 1) + " < " + QmeFmt(cfg.In.minScore, 1);
       m_rejected++;
+      ApplyState(s.id, QME_SIG_REJECTED, out.reason, out.note);
       return(false);
      }
 
