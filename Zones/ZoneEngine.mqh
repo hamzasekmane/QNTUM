@@ -75,7 +75,10 @@ int CZoneEngine::Update(const SMarketAnalysis &a, CBarSeries &series,
                         const datetime now, const double point)
   {
    if(!m_initialized) return(0);
-   if(!a.valid) return(0);
+   // Allow zone generation from available detectors (OB/FVG/VolumeProfile)
+   // whenever core price/ATR/bar data are usable, even if optional modules
+   // like liquidity or structure were incomplete. Each CZoneBuilder checks its own inputs.
+   if(a.price <= 0.0 || a.atr <= 0.0 || a.barTime == 0) return(0);
 
    const double atr = MathMax(a.atr, point * 10.0);
 

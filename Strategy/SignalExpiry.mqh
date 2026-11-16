@@ -64,10 +64,12 @@ int CSignalExpiry::Process(CSignalRegistry &registry, CSignalLifecycle &lifecycl
                            CZoneEngine &zones, const datetime now, const double price)
   {
    int expired = 0;
+   const string zoneSymbol = zones.Symbol();
    for(int i = 0; i < registry.Count(); i++)
      {
       STradingSignal s;
       if(!registry.At(i, s)) continue;
+      if(StringLen(zoneSymbol) > 0 && s.symbol != zoneSymbol) continue;
       //--- only pre-execution states can expire
       if(!(s.state == QME_SIG_DETECTED || s.state == QME_SIG_EVALUATING ||
            s.state == QME_SIG_APPROVED))

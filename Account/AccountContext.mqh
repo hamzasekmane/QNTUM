@@ -110,14 +110,18 @@ bool CAccountContext::Refresh(void)
    const datetime now = TimeCurrent();
    if(m_lastRefresh > 0 && now - m_lastRefresh < m_refreshSec && m_acc.valid)
      {
-      //--- cheap path: still update the volatile numbers
+      //--- cheap path: still update volatile numbers, permission gates, and day rollover
       m_acc.equity     = AccountInfoDouble(ACCOUNT_EQUITY);
       m_acc.margin     = AccountInfoDouble(ACCOUNT_MARGIN);
       m_acc.freeMargin = AccountInfoDouble(ACCOUNT_MARGIN_FREE);
       m_acc.marginLevel= AccountInfoDouble(ACCOUNT_MARGIN_LEVEL);
       m_acc.profit     = AccountInfoDouble(ACCOUNT_PROFIT);
+      m_acc.terminalTradeAllowed = CTradingPermissions::TerminalTradingAllowed();
+      m_acc.mqlTradeAllowed      = CTradingPermissions::MqlTradingAllowed();
+      m_acc.connected            = (bool)TerminalInfoInteger(TERMINAL_CONNECTED);
       m_acc.updated    = now;
       m_state.Update(m_acc);
+      m_state.RollDay(TimeTradeServer(), m_acc);
       return(true);
      }
 

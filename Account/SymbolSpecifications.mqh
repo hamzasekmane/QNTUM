@@ -214,7 +214,8 @@ bool CSymbolSpecifications::VolumeInRange(const SSymbolSpec &spec, const double 
 //------------------------------------------------------------------//
 double CSymbolSpecifications::MinStopDistance(const SSymbolSpec &spec)
   {
-   return(spec.stopsLevelPoints * spec.point);
+   const int minPoints = MathMax(MathMax(spec.stopsLevelPoints, spec.freezeLevelPoints), 0);
+   return(minPoints * spec.point);
   }
 
 #endif // __QME_ACCOUNT_SYMBOLSPEC_MQH__

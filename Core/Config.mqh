@@ -131,8 +131,8 @@ void QmeInputsDefaults(SInputs &in)
    in.maxDrawdownPct        = 10.0;
    in.maxPositions          = 3;
    in.maxPositionsPerSymbol = 1;
-   in.maxSymbolExposurePct  = 5.0;
-   in.maxPortfolioExposurePct = 12.0;
+   in.maxSymbolExposurePct  = 150.0;
+   in.maxPortfolioExposurePct = 300.0;
    in.maxConsecutiveLosses  = 3;
    in.minRR                 = QME_MIN_RR_DEFAULT;
    in.maxSpreadPoints       = 0.0;
@@ -250,10 +250,10 @@ bool CConfig::Init(const SInputs &src, string &err)
       return(Fail(err, "maxPositions must be in [1,100]"));
    if(In.maxPositionsPerSymbol < 1 || In.maxPositionsPerSymbol > In.maxPositions)
       return(Fail(err, "maxPositionsPerSymbol must be in [1,maxPositions]"));
-   if(In.maxSymbolExposurePct <= 0.0 || In.maxSymbolExposurePct > 100.0)
-      return(Fail(err, "maxSymbolExposurePct must be in (0,100]"));
-   if(In.maxPortfolioExposurePct <= 0.0 || In.maxPortfolioExposurePct > 100.0)
-      return(Fail(err, "maxPortfolioExposurePct must be in (0,100]"));
+   if(In.maxSymbolExposurePct <= 0.0 || In.maxSymbolExposurePct > 1000.0)
+      return(Fail(err, "maxSymbolExposurePct must be in (0,1000]"));
+   if(In.maxPortfolioExposurePct <= 0.0 || In.maxPortfolioExposurePct > 1000.0)
+      return(Fail(err, "maxPortfolioExposurePct must be in (0,1000]"));
    if(In.maxSymbolExposurePct > In.maxPortfolioExposurePct)
       return(Fail(err, "maxSymbolExposurePct must not exceed maxPortfolioExposurePct"));
    if(In.maxConsecutiveLosses < 0 || In.maxConsecutiveLosses > 50)

@@ -95,10 +95,30 @@ bool CDataQualityGuard::Evaluate(CTimeframeContext &ctx, const double curSpreadP
      }
    else if(periodSec > 0.0 && out.barAgeSeconds > periodSec * 3.0)
      {
-      //--- 3 periods without a new closed bar: market closed or feed frozen
-      out.stale = true;
-      out.flags |= QME_DQ_FLAG_STALE;
-      out.note = "newest bar is " + QmeFmt(out.barAgeSeconds / 60.0, 1) + " min old";
+      //--- A gap longer than 3 periods is only benign when every missed bar
+      //--- up to the current period boundary fell outside broker quote sessions
+      //--- (e.g. H4/H1 right after a weekend or holiday close). Unknown
+      //--- schedules and gaps > 7 days always fail closed as stale.
+      bool closedSessionGap = false;
+      if(out.barAgeSeconds <= 7.0 * 86400.0 && periodInt > 0)
+        {
+         const long periodsElapsed = (long)(server - lastBar) / periodInt;
+         const datetime expectedCurrentOpen = lastBar + (datetime)(periodsElapsed * periodInt);
+         if(expectedCurrentOpen > lastBar + periodInt)
+           {
+            string staleSessionReason = "";
+            closedSessionGap = QmeGapCoveredByClosedQuoteSessions(series.Symbol(), lastBar,
+                                                                   expectedCurrentOpen, periodInt,
+                                                                   staleSessionReason);
+           }
+        }
+      if(!closedSessionGap)
+        {
+         //--- 3 periods without a new closed bar inside open sessions: market closed or feed frozen
+         out.stale = true;
+         out.flags |= QME_DQ_FLAG_STALE;
+         out.note = "newest bar is " + QmeFmt(out.barAgeSeconds / 60.0, 1) + " min old";
+        }
      }
 
    //--- Validate every large timestamp gap against the broker QUOTE schedule.

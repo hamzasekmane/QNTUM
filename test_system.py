@@ -318,6 +318,27 @@ def test_recovery_preflight_regression():
     return check("recovery preflight precedes live mutation with late-failure regression fixture", ok)
 
 
+def test_production_readiness_regressions():
+    expiry = read("Strategy/SignalExpiry.mqh")
+    zones = read("Zones/ZoneEngine.mqh")
+    collector = read("Strategy/MTF/CandidateCollector.mqh")
+    quality = read("Data/DataQualityGuard.mqh")
+    spec = read("Account/SymbolSpecifications.mqh")
+    pos_store = read("Persistence/PositionStateStore.mqh")
+    hist_store = read("Persistence/SignalHistoryStore.mqh")
+    cfg = read("Core/Config.mqh")
+    ok = ("zones.Symbol()" in expiry and "s.symbol != zoneSymbol" in expiry
+          and "if(!a.valid) return(0);" not in zones
+          and "a.price <= 0.0 || a.atr <= 0.0 || a.barTime == 0" in zones
+          and "entry.type != QME_ENTRY_MARKET" in collector
+          and "closedSessionGap" in quality
+          and "freezeLevelPoints" in spec
+          and "if(StringSplit(lines[i], '|', f) < 11 || f[0] != \"pos\")" in pos_store
+          and "if(StringSplit(lines[i], '|', f) < 11 || f[0] != \"sig\")" in hist_store
+          and "In.maxSymbolExposurePct > 1000.0" in cfg)
+    return check("production-readiness regressions (expiry scope, partial zones, market entry gate, closed-session staleness, freeze level, strict store parse, exposure ceiling)", ok)
+
+
 def test_mql5_test_programs_paired():
     programs = sorted(ROOT.glob("Tests/*/*.mq5"))
     ok = check("23 MQL5 test programs present", len(programs) == 23,
@@ -350,6 +371,7 @@ ALL_TESTS = [
     test_order_send_ownership_comment,
     test_scanner_counter_semantics,
     test_recovery_preflight_regression,
+    test_production_readiness_regressions,
     test_mql5_test_programs_paired,
 ]
 

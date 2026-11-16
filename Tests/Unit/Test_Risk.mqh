@@ -153,6 +153,26 @@ int RunRiskTests(void)
    g_kit.Check(!allowed, "daily loss guard blocks a 4% intraday loss");
    g_kit.Check(pct <= -3.0, "reported daily P/L is at or below -3%");
 
+   //--- exposure defaults & config validation bounds (leveraged FX/CFD calibration)
+   SInputs expIn;
+   QmeInputsDefaults(expIn);
+   CConfig expCfg;
+   string expErr = "";
+   g_kit.Check(expCfg.Init(expIn, expErr), "default leveraged exposure config validates: " + expErr);
+   g_kit.Check(eurMinNotional <= (expCfg.In.maxSymbolExposurePct / 100.0) * 10000.0,
+               "default symbol exposure cap permits 0.01 EURUSD on 10k equity");
+   g_kit.Check(xauMinNotional <= (expCfg.In.maxSymbolExposurePct / 100.0) * 10000.0,
+               "default symbol exposure cap permits 0.01 XAUUSD on 10k equity");
+   expIn.maxSymbolExposurePct = 1001.0;
+   g_kit.Check(!expCfg.Init(expIn, expErr), "exposure above 1000% ceiling is rejected");
+
+   //--- freezeLevelPoints must contribute to minimum stop distance
+   SSymbolSpec freezeSpec = spec;
+   freezeSpec.stopsLevelPoints = 10;
+   freezeSpec.freezeLevelPoints = 25;
+   g_kit.CheckClose(CSymbolSpecifications::MinStopDistance(freezeSpec), 25 * freezeSpec.point, 1e-10,
+                    "MinStopDistance honors freezeLevelPoints when larger than stopsLevelPoints");
+
    return(g_kit.End());
   }
 

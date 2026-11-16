@@ -167,13 +167,18 @@ bool CSignalHistoryStore::Deserialize(const string blob)
    int loaded = 0;
    for(int i = 0; i < n; i++)
      {
+      if(StringLen(lines[i]) == 0) continue;
       string f[];
-      if(StringSplit(lines[i], '|', f) < 11) continue;
-      if(f[0] != "sig") continue;
+      if(StringSplit(lines[i], '|', f) < 11 || f[0] != "sig")
+        {
+         Reset();
+         return(false);
+        }
 
       SSignalRecord r;
       r.id = (ulong)StringToInteger(f[1]);
       r.symbol = CStateSerializer::Unescape(f[2]);
+      if(f[3] != "BUY" && f[3] != "SELL") { Reset(); return(false); }
       r.side = (f[3] == "BUY") ? QME_SIDE_BUY : QME_SIDE_SELL;
       r.finalState = (ENUM_QME_SIGNAL_STATE)StringToInteger(f[4]);
       r.reason = (ENUM_QME_REJECT)StringToInteger(f[5]);
@@ -182,7 +187,7 @@ bool CSignalHistoryStore::Deserialize(const string blob)
       r.opened = (datetime)StringToInteger(f[8]);
       r.closed = (datetime)StringToInteger(f[9]);
       r.fingerprint = CStateSerializer::Unescape(f[10]);
-      if(r.id == 0) continue;
+      if(r.id == 0) { Reset(); return(false); }
       Add(r);
       loaded++;
      }

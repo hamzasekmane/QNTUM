@@ -128,6 +128,34 @@ int RunZoneTests(void)
    g_kit.Check(ss > sw, "stronger zone ranks higher");
    g_kit.Check(ss <= 1.0 && ss >= 0.0, "ranking score stays in [0,1]");
 
+   //--- CZoneEngine::Update must build available FVG/OB zones even if optional
+   //--- modules (liquidity/structure) are incomplete (a.valid == false), while
+   //--- still refusing degenerate price/ATR inputs.
+   CZoneEngine partialEngine;
+   partialEngine.Init("EURUSD", 72, 60.0);
+   CBarSeries emptySeries;
+   emptySeries.Reset();
+   SMarketAnalysis partial;
+   QmeAnalysisClear(partial);
+   partial.symbol = "EURUSD";
+   partial.tf = PERIOD_M15;
+   partial.barTime = now - 900;
+   partial.price = 1.1010;
+   partial.atr = 0.0010;
+   partial.valid = false;
+   partial.fvgCount = 1;
+   partial.fvgs[0].time = now - 1800;
+   partial.fvgs[0].side = QME_SIDE_BUY;
+   partial.fvgs[0].lower = 1.0990;
+   partial.fvgs[0].upper = 1.1005;
+   partial.fvgs[0].fillRatio = 0.1;
+   partial.fvgs[0].filled = false;
+   g_kit.Check(partialEngine.Update(partial, emptySeries, now, 0.00001) > 0,
+               "ZoneEngine builds zones from FVG when optional analysis flags are incomplete");
+   partial.atr = 0.0;
+   g_kit.CheckEqual(partialEngine.Update(partial, emptySeries, now, 0.00001), 0,
+                    "ZoneEngine refuses zero ATR");
+
    return(g_kit.End());
   }
 

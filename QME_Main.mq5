@@ -56,8 +56,8 @@ input double            InpMaximumDailyLossPercent     = 3.0;            // Max 
 input double            InpMaximumDrawdownPercent      = 10.0;           // Max drawdown (%)
 input int               InpMaximumPositions        = 3;              // Max concurrent positions
 input int               InpMaxPositionsPerSymbol = 1;            // Max positions per symbol
-input double            InpMaxSymbolExposurePct = 5.0;           // Max symbol notional (% of equity)
-input double            InpMaxPortfolioExposurePct = 12.0;       // Max portfolio notional (%)
+input double            InpMaxSymbolExposurePct = 150.0;         // Max symbol notional (% of equity; 100 = 1:1)
+input double            InpMaxPortfolioExposurePct = 300.0;      // Max portfolio notional (% of equity; 100 = 1:1)
 input int               InpMaxConsecutiveLosses = 3;             // Max consecutive losses
 input double            InpMinimumRiskReward               = 1.5;            // Minimum reward:risk
 input double            InpMaximumSpreadPoints     = 0.0;            // Max spread in points (0 = off)
@@ -110,6 +110,7 @@ SDashboardData         g_dashData;
 string                 g_initError = "";
 datetime               g_started = 0;
 long                   g_ticks = 0;
+long                   g_lastEngineErrors = 0;
 
 //+------------------------------------------------------------------+
 //| Build SInputs from the input variables.                           |
@@ -230,8 +231,20 @@ void Housekeeping(void)
    datetime lastData = 0;
    if(sc != NULL)
      {
-      CSymbolRuntime *rt0 = sc.At(0);
-      if(rt0 != NULL) lastData = rt0.snapshot.time;
+      for(int i = 0; i < sc.Count(); i++)
+        {
+         CSymbolRuntime *rt = sc.At(i);
+         if(rt != NULL && rt.snapshot.time > lastData)
+            lastData = rt.snapshot.time;
+        }
+     }
+
+   const long curEngineErrors = g_engine.Errors();
+   if(curEngineErrors > g_lastEngineErrors)
+     {
+      for(long e = g_lastEngineErrors; e < curEngineErrors; e++)
+         g_errors.Report(QME_ERRC_EXECUTION, "engine execution/persistence error");
+      g_lastEngineErrors = curEngineErrors;
      }
 
    // A blocked recovery intentionally suppresses normal scan cycles. Do not
@@ -250,7 +263,8 @@ void Housekeeping(void)
    //--- health
    const datetime lastCheckpoint = InpPersistState ? g_engine.LastCheckpoint() : 0;
    SHealthReport h = CHealthMonitor::Evaluate(*g_engine.Account(), InpMagicNumber, lastData, 300,
-                                              lastCheckpoint, 1800, g_errors.Total(), 50);
+                                              lastCheckpoint, 1800,
+                                              MathMax(g_errors.Total(), curEngineErrors), 50);
    if(!h.positionsProtected && g_engine.Controller().State() != QME_RT_FAULT)
       g_engine.Controller().Fault("unprotected position detected; operator action required");
    if(h.status != QME_HEALTH_OK)
@@ -312,6 +326,7 @@ int OnInit(void)
    g_perf.Init(100, 250.0);
    g_watchdog.Init(MathMax(InpScanIntervalMs / 1000 * 6, 60), 300, 50);
    g_errors.Reset();
+   g_lastEngineErrors = 0;
 
    //--- 5. timers
    EventSetTimer(1);
@@ -389,6 +404,7 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,
 void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
   {
    //--- a double click on an alert object opens the diagnostics in the log
+   if(!g_engine.Ready()) return;
    if(id != CHARTEVENT_OBJECT_CLICK) return;
    if(StringFind(sparam, "qme_dash_") != 0) return;
 

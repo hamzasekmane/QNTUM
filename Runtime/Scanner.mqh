@@ -208,6 +208,7 @@ bool CScanner::Init(CMarketData *data, CConfig *cfg, const SInputs &in, string &
      }
 
    int created = 0;
+   string lastSymErr = "";
    for(int i = 0; i < n; i++)
      {
       if(created >= QME_MAX_SYMBOLS) break;
@@ -221,18 +222,23 @@ bool CScanner::Init(CMarketData *data, CConfig *cfg, const SInputs &in, string &
       string symErr = "";
       if(!rt.Init(syms[i], created, in, *cfg, symErr))
         {
-         err = "symbol " + syms[i] + ": " + symErr;
+         lastSymErr = "symbol " + syms[i] + ": " + symErr;
+         QmeLogMsg(QME_LOG_ERROR, "Scanner", "skipping unready symbol at init: " + lastSymErr);
          delete rt;
-         Shutdown();
-         return(false);
+         continue;
         }
       m_rt[created] = rt;
       created++;
       m_count = created;
      }
    m_count = created;
+   if(m_count <= 0)
+     {
+      err = (StringLen(lastSymErr) > 0) ? lastSymErr : "no usable symbol runtime initialised";
+      return(false);
+     }
    QmeLogMsg(QME_LOG_INFO, "Scanner", IntegerToString(m_count) + " symbol(s) initialised");
-   return(m_count > 0);
+   return(true);
   }
 
 //------------------------------------------------------------------//
