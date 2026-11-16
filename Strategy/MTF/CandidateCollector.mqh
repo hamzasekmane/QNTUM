@@ -297,6 +297,10 @@ int CCandidateCollector::Collect(const SMarketAnalysis &bias, const SMarketAnaly
                                              MathMax(rrTarget, 2.0), maxStopAtr);
       if(!entry.valid)
         { rejects.invalidEntry++; continue; }
+      // ExecutionGateway currently supports QME_ENTRY_MARKET only; do not emit
+      // QME_ENTRY_LIMIT/STOP candidates that would burn signal quota and fail downstream.
+      if(entry.type != QME_ENTRY_MARKET)
+        { rejects.invalidEntry++; continue; }
 
       // Reversal geometry is anchored to the confirmed raid wick. The first
       // opposite-side liquidity pool is the target; if it cannot pay 2R,

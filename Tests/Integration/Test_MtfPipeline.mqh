@@ -156,6 +156,27 @@ int RunMtfPipelineTest(void)
          g_kit.Check(!invalidVerdict.ok && invalidVerdict.reason==QME_REJ_INTERNAL,
                      "SetupEngine continues to reject genuinely invalid merged candidate");
         }
+
+      //--- price outside zone generates QME_ENTRY_LIMIT in EntryRig; collector
+      //--- must not emit unexecutable limit candidates while Gateway is market-only.
+      CZoneEngine outsideZones;
+      outsideZones.Init(_Symbol, 72, 60.0);
+      STradingZone farZone; QmeZoneClear(farZone);
+      farZone.id=991338; farZone.symbol=_Symbol; farZone.tf=in.tfSetup; farZone.side=QME_SIDE_BUY;
+      farZone.source=QME_ZONE_SRC_FVG;
+      farZone.upper=livePrice-setup.atr*0.40;
+      farZone.lower=livePrice-setup.atr*0.60;
+      farZone.created=TimeCurrent(); farZone.lastTouched=TimeCurrent();
+      farZone.expires=TimeCurrent()+3600; farZone.strength=0.9; farZone.confidence=0.9;
+      farZone.state=QME_ZSTAT_FRESH; farZone.factorMask=CFactorCatalog::Bit(QME_F_FVG);
+      g_kit.Check(outsideZones.Board().AddOrMerge(farZone, 60.0), "outside fixture zone inserted");
+      SCandidateHypothesis limitHyps[]; SCandidateRejectCounts limitRejects;
+      g_kit.CheckEqual(CCandidateCollector::Collect(bias,structure,setup,outsideZones,spec,cfg,
+                       livePrice,setup.atr,spec.point,cfg.In.minRR*1.1,4.0,
+                       limitHyps,QME_MAX_CANDIDATES,limitRejects), 0,
+                       "collector suppresses QME_ENTRY_LIMIT when ExecutionGateway is market-only");
+      g_kit.Check(limitRejects.invalidEntry > 0, "outside-zone entry counted as collector rejection");
+      outsideZones.Shutdown();
      }
 
    zones.Shutdown();

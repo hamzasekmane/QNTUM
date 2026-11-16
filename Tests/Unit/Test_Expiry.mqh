@@ -129,6 +129,18 @@ int RunExpiryTests(void)
    g_kit.CheckEqual(CSignalExpiry::Process(registry, lifecycle, zones, now, 1.10100), 0,
                     "expiry is idempotent");
 
+   //--- cross-symbol isolation: EURUSD zone board must not invalidate GBPUSD signals
+   STradingSignal gbp;
+   QmeTestSignal(gbp, QME_SIDE_BUY, now);
+   gbp.id = 4;
+   gbp.symbol = "GBPUSD";
+   gbp.fingerprint = "fp-gbp-4";
+   g_kit.Check(registry.Add(gbp, why, note), "other-symbol signal registers");
+   g_kit.CheckEqual(CSignalExpiry::Process(registry, lifecycle, zones, now, 1.10100), 0,
+                    "EURUSD zone board leaves GBPUSD pending signal untouched");
+   g_kit.Check(registry.Get(4, after) && after.state == QME_SIG_APPROVED,
+               "GBPUSD signal remains APPROVED");
+
    return(g_kit.End());
   }
 

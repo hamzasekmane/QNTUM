@@ -843,7 +843,6 @@ bool CEngine::Cycle(const bool force, string &note)
         {
          signalsThisCycle++;
          m_signalsTotal++;
-         m_signalsToday++;
 
          SDecision dec;
          const double atr = rt.analysis[4].atr > 0.0 ? rt.analysis[4].atr : rt.analysis[3].atr;
@@ -860,6 +859,8 @@ bool CEngine::Cycle(const bool force, string &note)
             dec.verdict = QME_DEC_DEFERRED;
             dec.reason = QME_REJ_DISABLED_BY_CONFIG;
             dec.note = "signal-only preview: saved state recovery blocked; no execution";
+            ApplySignalState(sigs[k].id, QME_SIG_REJECTED, QME_REJ_DISABLED_BY_CONFIG, dec.note);
+            sigs[k].state = QME_SIG_REJECTED;
             RecordDecision(dec, m_cycles);
             m_history.Add(MakeHistoryRecord(sigs[k], QME_REJ_DISABLED_BY_CONFIG));
             m_funnel.Drop(m_funnel.Stage("trading"), "recovery blocked; signal-only preview");
@@ -878,6 +879,8 @@ bool CEngine::Cycle(const bool force, string &note)
             dec.verdict = QME_DEC_DEFERRED;
             dec.reason = QME_REJ_DISABLED_BY_CONFIG;
             dec.note = tradeWhy;
+            ApplySignalState(sigs[k].id, QME_SIG_REJECTED, QME_REJ_DISABLED_BY_CONFIG, tradeWhy);
+            sigs[k].state = QME_SIG_REJECTED;
             RecordDecision(dec, m_cycles);
             m_history.Add(MakeHistoryRecord(sigs[k], QME_REJ_DISABLED_BY_CONFIG));
             m_funnel.Drop(m_funnel.Stage("trading"), QmeRejectName(QME_REJ_DISABLED_BY_CONFIG));
@@ -890,9 +893,13 @@ bool CEngine::Cycle(const bool force, string &note)
             !m_account.State().SyncFromHistory(m_cfg.In.magic, TimeCurrent()))
            {
             m_controller.Fault("cannot synchronize broker loss history");
+            ApplySignalState(sigs[k].id, QME_SIG_REJECTED, QME_REJ_EXECUTION_FAILED, "broker history unavailable");
+            sigs[k].state = QME_SIG_REJECTED;
             m_funnel.Drop(m_funnel.Stage("trading"), "broker history unavailable");
             continue;
            }
+
+         m_signalsToday++;
 
          if(!m_decisions.Decide(sigs[k], rt.spec, m_cfg, session.session,
                                 session.tradingAllowed, atr, spread, dec))
