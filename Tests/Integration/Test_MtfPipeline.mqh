@@ -177,6 +177,47 @@ int RunMtfPipelineTest(void)
                        "collector suppresses QME_ENTRY_LIMIT when ExecutionGateway is market-only");
       g_kit.Check(limitRejects.invalidEntry > 0, "outside-zone entry counted as collector rejection");
       outsideZones.Shutdown();
+
+      //--- SignalEngine runtime regressions:
+      //--- (1) structure-only setup/bias fallback contributes to confluence when EMAs are flat;
+      //--- (2) SetupGate rejections preserve preliminary factor score (non-zero) and
+      //---     repeated timer scans on identical closed bars do not spawn duplicate rejected signals.
+      CScoringEngine sigScorer;
+      CStrategyRegistry sigStrategies; sigStrategies.Init();
+      CSignalLifecycle sigLifecycle;
+      CSignalDeduplicator sigDedup;
+      CSignalEngine sigEngine;
+      sigEngine.Attach(&sigScorer, &sigStrategies, &sigLifecycle, &sigDedup);
+
+      SMarketAnalysis ctx0 = bias; ctx0.tf = PERIOD_D1; ctx0.bias.valid = false; ctx0.bias.side = QME_SIDE_NONE; ctx0.structure.valid = false;
+      SMarketAnalysis bias0 = bias; bias0.tf = PERIOD_H4; bias0.bias.valid = false; bias0.bias.side = QME_SIDE_NONE;
+      bias0.structure.valid = true; bias0.structure.trend = QME_TREND_UP;
+      SMarketAnalysis struct0 = structure; struct0.tf = PERIOD_H1;
+      struct0.structure.valid = true; struct0.structure.trend = QME_TREND_UP;
+      struct0.trend.valid = true; struct0.trend.trend = QME_TREND_UP; struct0.trend.strength = 0.6;
+      SMarketAnalysis setup0 = setup; setup0.tf = PERIOD_M15;
+      setup0.trend.valid = true; setup0.trend.trend = QME_TREND_FLAT; setup0.trend.strength = 0.0;
+      setup0.structure.valid = true; setup0.structure.trend = QME_TREND_UP;
+      SMarketAnalysis entry0 = setup; entry0.tf = PERIOD_M5; entry0.barTime = setup.barTime;
+      entry0.momentum.valid = false; entry0.displacement.valid = false; entry0.pattern.valid = false;
+
+      SDataQuality sigDq; QmeDataQualityClear(sigDq); sigDq.ok = true;
+      CSignalRegistry sigReg;
+      STradingSignal sigOut[];
+      CConfig strictCfg = cfg;
+      strictCfg.In.minConfluence = 0.90; // force deterministic SetupGate NO_CONFLUENCE rejection
+      sigEngine.Generate(ctx0, bias0, struct0, setup0, entry0, zones, spec, strictCfg, sigDq, sigReg, sigOut);
+      const int countAfterFirst = sigReg.Count();
+      g_kit.Check(countAfterFirst >= 1, "first deterministic rejection creates one recorded signal");
+      STradingSignal firstRec; QmeSignalClear(firstRec);
+      if(countAfterFirst >= 1)
+         g_kit.Check(sigReg.At(0, firstRec), "recorded signal readable");
+      g_kit.Check(firstRec.score > 0.0, "SetupGate rejection preserves non-zero preliminary factor score");
+      g_kit.Check(firstRec.confidence > 0.22, "H4/M15 structure fallback supplies confluence > 0.22 when EMA trend is flat");
+
+      sigEngine.Generate(ctx0, bias0, struct0, setup0, entry0, zones, spec, strictCfg, sigDq, sigReg, sigOut);
+      g_kit.CheckEqual(sigReg.Count(), countAfterFirst,
+                       "repeat 5s scan on identical closed bars suppresses duplicate rejected signal");
      }
 
    zones.Shutdown();
