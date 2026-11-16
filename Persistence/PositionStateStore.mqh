@@ -184,14 +184,19 @@ bool CPositionStateStore::Deserialize(const string blob)
    int loaded = 0;
    for(int i = 0; i < n; i++)
      {
+      if(StringLen(lines[i]) == 0) continue;
       string f[];
-      if(StringSplit(lines[i], '|', f) < 11) continue;
-      if(f[0] != "pos") continue;
-      if(m_count >= QME_MAX_TRACKED_POSITIONS) break;
+      if(StringSplit(lines[i], '|', f) < 11 || f[0] != "pos")
+        {
+         Reset();
+         return(false);
+        }
+      if(m_count >= QME_MAX_TRACKED_POSITIONS) { Reset(); return(false); }
 
       STrackedPosition p;
       p.ticket = (ulong)StringToInteger(f[1]);
       p.symbol = CStateSerializer::Unescape(f[2]);
+      if(f[3] != "BUY" && f[3] != "SELL") { Reset(); return(false); }
       p.side = (f[3] == "BUY") ? QME_SIDE_BUY : QME_SIDE_SELL;
       p.volume = StringToDouble(f[4]);
       p.entry = StringToDouble(f[5]);
@@ -200,7 +205,7 @@ bool CPositionStateStore::Deserialize(const string blob)
       p.signalId = (ulong)StringToInteger(f[8]);
       p.opened = (datetime)StringToInteger(f[9]);
       p.closed = (f[10] == "1");
-      if(p.ticket == 0 || StringLen(p.symbol) == 0) continue;
+      if(p.ticket == 0 || StringLen(p.symbol) == 0) { Reset(); return(false); }
       m_items[m_count] = p;
       m_count++;
       loaded++;

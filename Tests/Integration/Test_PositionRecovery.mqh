@@ -99,6 +99,17 @@ int RunPositionRecoveryTests(void)
    CPositionStateStore empty;
    g_kit.Check(!empty.Deserialize(""), "empty blob refused");
 
+   //--- a corrupt row after a valid row must fail deserialization atomically
+   CPositionStateStore corruptPos;
+   const string mixedPos = store.Serialize() + "pos|corrupt|row\n";
+   g_kit.Check(!corruptPos.Deserialize(mixedPos), "corrupt position row rejects entire store");
+   g_kit.CheckEqual(corruptPos.Count(), 0, "corrupt position store leaves zero partial records");
+
+   CSignalHistoryStore corruptHist;
+   g_kit.Check(!corruptHist.Deserialize("sig|1|EURUSD|BUY|1|0|80.0|2.0|1000|0|fp1\nsig|broken\n"),
+               "corrupt signal history row rejects entire store");
+   g_kit.CheckEqual(corruptHist.Count(), 0, "corrupt signal history leaves zero partial records");
+
    // Recovery must validate late sections before mutating any live state.
    SAccountContext savedAccount;
    QmeAccountClear(savedAccount);
