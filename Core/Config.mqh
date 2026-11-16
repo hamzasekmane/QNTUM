@@ -147,7 +147,10 @@ void QmeInputsDefaults(SInputs &in)
    in.newsBlackoutWindows   = "";
 
    in.minScore              = QME_SCORE_MIN_DEFAULT;
-   in.minConfluence         = 0.4;
+   // D1 alone holds ~48% of the 5-TF confluence denominator; with
+   // requireHtfAlignment=false, 0.22 requires meaningful multi-TF alignment
+   // without vetoing all intraday setups when D1 is neutral/ranging.
+   in.minConfluence         = 0.22;
    // HTF bias contributes to weighted confluence but is not a hard veto;
    // countertrend setups remain possible with sufficiently strong evidence.
    in.requireHtfAlignment   = false;

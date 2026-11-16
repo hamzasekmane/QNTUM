@@ -1,7 +1,7 @@
 # QNTUM Production Readiness Checklist, Test Plan & Rollout Runbook
 
-**System:** `QuantumMarketEngine` (`QME_Main.mq5`)  
-**Branch:** `arena/19807fc5-qntum`  
+**System:** `QuantumMarketEngine` (`QME_Main.mq5`)
+**Branch:** `arena/62b247f8-qntum`
 **Date:** 2026-11-16  
 **Overall Release Status:** **READY FOR MT5 BUILD & DEMO SOAK** (`MetaEditor` compile & MT5 Strategy Tester runtime currently `UNVERIFIED` on Linux sandbox). **DO NOT enable REAL trading until Stages 1–3 below pass with saved logs.**
 
@@ -11,7 +11,7 @@
 
 | Check / Suite | Scope | Current Sandbox Result | Windows MT5 Build 6251 Requirement |
 |---|---|---|---|
-| `python3 test_system.py --verbose` | Static structure, `mql5check.py` (197 files), `mql5fields.py`, `mql5calls.py`, safety defaults, regression guards, 23 test pairs | **PASS (`53/53`)** | Re-run after any pull/edit |
+| `python3 test_system.py --verbose` | Static structure, `mql5check.py` (197 files), `mql5fields.py`, `mql5calls.py`, safety defaults, regression guards, 23 test pairs | **PASS (`54/54`)** | Re-run after any pull/edit |
 | `git diff --check` | Whitespace / patch hygiene | **PASS (`0` errors)** | N/A |
 | `QME_Main.mq5` MetaEditor compile | Full MQL5 compilation (`#property strict`) | `UNVERIFIED` | Must compile **0 errors, 0 warnings** |
 | Unit Suites (`10` EAs in `Tests/Unit/*.mq5`) | Algorithms, Canonical, Entry, Expiry (incl. cross-symbol), FVG safety, HashIndex, Instrumentation, Liquidity, Risk (incl. leveraged exposure + freezeLevel), Scoring, SignalLifecycle, Structure, Zones (incl. partial analysis) | `UNVERIFIED` | Run all 10 in Strategy Tester; **0 FAIL** |

@@ -339,6 +339,24 @@ def test_production_readiness_regressions():
     return check("production-readiness regressions (expiry scope, partial zones, market entry gate, closed-session staleness, freeze level, strict store parse, exposure ceiling)", ok)
 
 
+def test_signal_engine_runtime_log_regressions():
+    sig = read("Strategy/SignalEngine.mqh")
+    cfg = read("Core/Config.mqh")
+    ea = read("QME_Main.mq5")
+    suite = read("Tests/Integration/Test_MtfPipeline.mqh")
+    ok = ("WasRejectedForClosedBars(fp, cacheBarTime)" in sig
+          and "RememberDeterministicReject(fp, cacheBarTime" in sig
+          and "prelimScore = m_scorer.Score(merged[i].score, prelimBreakdown)" in sig
+          and "else if(context.structure.valid" in sig
+          and "else if(setup.structure.valid" in sig
+          and "else if(entryTf.displacement.valid" in sig
+          and "in.minConfluence         = 0.22;" in cfg
+          and "InpMinConfluence       = 0.22;" in ea
+          and "repeat 5s scan on identical closed bars suppresses duplicate rejected signal" in suite
+          and "SetupGate rejection preserves non-zero preliminary factor score" in suite)
+    return check("SignalEngine deterministic reject cache, preliminary score, BuildViews fallbacks, and calibrated minConfluence", ok)
+
+
 def test_mql5_test_programs_paired():
     programs = sorted(ROOT.glob("Tests/*/*.mq5"))
     ok = check("23 MQL5 test programs present", len(programs) == 23,
@@ -372,6 +390,7 @@ ALL_TESTS = [
     test_scanner_counter_semantics,
     test_recovery_preflight_regression,
     test_production_readiness_regressions,
+    test_signal_engine_runtime_log_regressions,
     test_mql5_test_programs_paired,
 ]
 

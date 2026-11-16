@@ -52,6 +52,17 @@ private:
    string             m_lastOutcome;
    SCandidateRejectCounts m_lastCandidateRejects;
 
+   //--- bounded closed-bar deterministic rejection cache (prevents 5s log/registry spam)
+   string             m_rejectFp[64];
+   datetime           m_rejectEntryBar[64];
+   ENUM_QME_REJECT    m_rejectReason[64];
+   int                m_rejectCount;
+   int                m_rejectHead;
+
+   static bool        IsDeterministicReject(const ENUM_QME_REJECT reason);
+   bool               WasRejectedForClosedBars(const string fp, const datetime entryBarTime);
+   void               RememberDeterministicReject(const string fp, const datetime entryBarTime,
+                                                   const ENUM_QME_REJECT reason);
    bool               RegistryHasFingerprint(CSignalRegistry &registry, const string fp);
    int                BuildViews(const SMarketAnalysis &context, const SMarketAnalysis &bias,
                                  const SMarketAnalysis &structure, const SMarketAnalysis &setup,
@@ -89,7 +100,64 @@ CSignalEngine::CSignalEngine(void)
    m_qualityFail = 0;
    m_approved = 0;
    m_lastOutcome = "no signal analysis yet";
+   m_rejectCount = 0;
+   m_rejectHead = 0;
+   for(int i = 0; i < 64; i++)
+     {
+      m_rejectFp[i] = "";
+      m_rejectEntryBar[i] = 0;
+      m_rejectReason[i] = QME_REJ_NONE;
+     }
    QmeCandidateRejectCountsClear(m_lastCandidateRejects);
+  }
+
+//------------------------------------------------------------------//
+bool CSignalEngine::IsDeterministicReject(const ENUM_QME_REJECT reason)
+  {
+   switch(reason)
+     {
+      case QME_REJ_NO_CONFLUENCE:
+      case QME_REJ_NO_STRUCTURE:
+      case QME_REJ_LOW_SCORE:
+      case QME_REJ_INVALIDATED:
+      case QME_REJ_RR:
+      case QME_REJ_SL_INVALID:
+      case QME_REJ_TP_INVALID:
+      case QME_REJ_INTERNAL:
+         return(true);
+     }
+   return(false);
+  }
+
+bool CSignalEngine::WasRejectedForClosedBars(const string fp, const datetime entryBarTime)
+  {
+   if(StringLen(fp) == 0 || entryBarTime <= 0) return(false);
+   for(int i = 0; i < m_rejectCount; i++)
+     {
+      if(m_rejectFp[i] == fp && m_rejectEntryBar[i] == entryBarTime)
+         return(true);
+     }
+   return(false);
+  }
+
+void CSignalEngine::RememberDeterministicReject(const string fp, const datetime entryBarTime,
+                                                const ENUM_QME_REJECT reason)
+  {
+   if(StringLen(fp) == 0 || entryBarTime <= 0 || !IsDeterministicReject(reason)) return;
+   for(int i = 0; i < m_rejectCount; i++)
+     {
+      if(m_rejectFp[i] == fp)
+        {
+         m_rejectEntryBar[i] = entryBarTime;
+         m_rejectReason[i] = reason;
+         return;
+        }
+     }
+   const int slot = (m_rejectCount < 64) ? m_rejectCount++ : m_rejectHead;
+   if(m_rejectCount >= 64) m_rejectHead = (m_rejectHead + 1) % 64;
+   m_rejectFp[slot] = fp;
+   m_rejectEntryBar[slot] = entryBarTime;
+   m_rejectReason[slot] = reason;
   }
 
 //------------------------------------------------------------------//
@@ -123,36 +191,79 @@ int CSignalEngine::BuildViews(const SMarketAnalysis &context, const SMarketAnaly
    // weight instead of silently disappearing and inflating confluence.
    STfView v;
    v.tf=context.tf; v.direction=QME_SIDE_NONE; v.strength=0.0;
-   if(context.bias.valid) { v.direction=context.bias.side; v.strength=context.bias.score; }
+   if(context.bias.valid && context.bias.side!=QME_SIDE_NONE)
+     { v.direction=context.bias.side; v.strength=context.bias.score; }
+   else if(context.structure.valid && (context.structure.trend==QME_TREND_UP || context.structure.trend==QME_TREND_DOWN))
+     {
+      v.direction=(context.structure.trend==QME_TREND_UP) ? QME_SIDE_BUY : QME_SIDE_SELL;
+      v.strength=0.45;
+     }
    ArrayResize(views,ArraySize(views)+1); views[ArraySize(views)-1]=v;
 
    v.tf=bias.tf; v.direction=QME_SIDE_NONE; v.strength=0.0;
-   if(bias.bias.valid) { v.direction=bias.bias.side; v.strength=bias.bias.score; }
+   if(bias.bias.valid && bias.bias.side!=QME_SIDE_NONE)
+     { v.direction=bias.bias.side; v.strength=bias.bias.score; }
+   else if(bias.structure.valid && (bias.structure.trend==QME_TREND_UP || bias.structure.trend==QME_TREND_DOWN))
+     {
+      v.direction=(bias.structure.trend==QME_TREND_UP) ? QME_SIDE_BUY : QME_SIDE_SELL;
+      v.strength=0.45;
+     }
    ArrayResize(views,ArraySize(views)+1); views[ArraySize(views)-1]=v;
 
    v.tf=structure.tf; v.direction=QME_SIDE_NONE; v.strength=0.0;
-   if(structure.structure.valid && structure.trend.valid)
+   if(structure.structure.valid && (structure.structure.trend==QME_TREND_UP || structure.structure.trend==QME_TREND_DOWN))
      {
-      if(structure.structure.trend==QME_TREND_UP) v.direction=QME_SIDE_BUY;
-      if(structure.structure.trend==QME_TREND_DOWN) v.direction=QME_SIDE_SELL;
-      v.strength=QmeClamp(0.5+0.5*structure.trend.strength,0.0,1.0);
+      v.direction=(structure.structure.trend==QME_TREND_UP) ? QME_SIDE_BUY : QME_SIDE_SELL;
+      const double tStr=structure.trend.valid ? structure.trend.strength : 0.30;
+      v.strength=QmeClamp(0.5+0.5*tStr,0.0,1.0);
+     }
+   else if(structure.trend.valid && (structure.trend.trend==QME_TREND_UP || structure.trend.trend==QME_TREND_DOWN))
+     {
+      v.direction=(structure.trend.trend==QME_TREND_UP) ? QME_SIDE_BUY : QME_SIDE_SELL;
+      v.strength=QmeClamp(structure.trend.strength,0.35,1.0);
      }
    ArrayResize(views,ArraySize(views)+1); views[ArraySize(views)-1]=v;
 
    v.tf=setup.tf; v.direction=QME_SIDE_NONE; v.strength=0.0;
-   if(setup.trend.valid)
+   if(setup.trend.valid && (setup.trend.trend==QME_TREND_UP || setup.trend.trend==QME_TREND_DOWN))
      {
-      if(setup.trend.trend==QME_TREND_UP) v.direction=QME_SIDE_BUY;
-      if(setup.trend.trend==QME_TREND_DOWN) v.direction=QME_SIDE_SELL;
-      v.strength=setup.trend.strength;
+      v.direction=(setup.trend.trend==QME_TREND_UP) ? QME_SIDE_BUY : QME_SIDE_SELL;
+      v.strength=MathMax(setup.trend.strength,0.45);
+     }
+   else if(setup.structure.valid && (setup.structure.trend==QME_TREND_UP || setup.structure.trend==QME_TREND_DOWN))
+     {
+      v.direction=(setup.structure.trend==QME_TREND_UP) ? QME_SIDE_BUY : QME_SIDE_SELL;
+      v.strength=0.50;
+     }
+   else if(setup.mss.valid)
+     {
+      v.direction=(setup.mss.event==QME_STRUCT_MSS_UP) ? QME_SIDE_BUY : QME_SIDE_SELL;
+      v.strength=0.45;
+     }
+   else if(setup.bos.valid)
+     {
+      v.direction=(setup.bos.event==QME_STRUCT_BOS_UP) ? QME_SIDE_BUY : QME_SIDE_SELL;
+      v.strength=0.40;
      }
    ArrayResize(views,ArraySize(views)+1); views[ArraySize(views)-1]=v;
 
    v.tf=entryTf.tf; v.direction=QME_SIDE_NONE; v.strength=0.0;
-   if(entryTf.momentum.valid)
+   if(entryTf.momentum.valid && entryTf.momentum.direction!=QME_SIDE_NONE &&
+      MathAbs(entryTf.momentum.value)>0.10)
      {
       v.direction=entryTf.momentum.direction;
       v.strength=QmeClamp(MathAbs(entryTf.momentum.value),0.0,1.0);
+     }
+   else if(entryTf.displacement.valid && entryTf.displacement.found &&
+           entryTf.displacement.side!=QME_SIDE_NONE)
+     {
+      v.direction=entryTf.displacement.side;
+      v.strength=QmeClamp(entryTf.displacement.score,0.35,0.85);
+     }
+   else if(entryTf.pattern.valid && entryTf.pattern.bias!=QME_SIDE_NONE)
+     {
+      v.direction=entryTf.pattern.bias;
+      v.strength=QmeClamp(entryTf.pattern.quality,0.30,0.75);
      }
    ArrayResize(views,ArraySize(views)+1); views[ArraySize(views)-1]=v;
 
@@ -216,6 +327,9 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
       // plans retain their stronger registry/idempotency protections above.
       if(registry.HasInternalRejectFingerprint(fp))
         { m_lastOutcome = "identical INTERNAL rejection suppressed until new closed bar"; continue; }
+      const datetime cacheBarTime = (entryTf.barTime > 0) ? entryTf.barTime : setup.barTime;
+      if(WasRejectedForClosedBars(fp, cacheBarTime))
+        { m_lastOutcome = "identical closed-bar rejection suppressed until new bar"; continue; }
       if(m_dedup != NULL && m_dedup.IsDuplicate(fp, cfg.In.cooldownSecPerSymbol, TimeCurrent()))
         { m_lastOutcome = "fingerprint cooldown active"; continue; }
 
@@ -223,11 +337,14 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
       if(!m_strategies.IsEnabled(playbook))
         { m_lastOutcome = "playbook disabled: " + playbook; continue; }
 
-      //--- 3. confluence
+      //--- 3. confluence + preliminary score (visible even on SetupGate rejection)
       STfView views[];
       const int nViews = BuildViews(context, bias, structure, setup, entryTf, merged[i].cand.side, views);
       const SConfluenceResult conf = CMtfConfluenceEngine::Evaluate(merged[i].cand.side,
                                                                     views, nViews);
+
+      SFactorBreakdown prelimBreakdown;
+      const double prelimScore = m_scorer.Score(merged[i].score, prelimBreakdown);
 
       //--- 4. setup gate
       const SSetupVerdict verdict = CSetupEngine::Evaluate(merged[i], conf, cfg, dq);
@@ -252,6 +369,9 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
       sig.source = merged[i].cand.source;
       sig.barTime = setup.barTime;
       sig.fingerprint = fp;
+      sig.score = prelimScore;
+      sig.confidence = conf.score;
+      sig.breakdown = prelimBreakdown;
       sig.created = TimeCurrent();
       sig.updated = sig.created;
       sig.expires = sig.created + (datetime)(cfg.In.signalExpiryMinutes * 60);
@@ -278,6 +398,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
          m_lifecycle.Transition(sig, QME_SIG_REJECTED, verdict.reason,
                                 verdict.note + " playbook=" + playbook, sig.updated);
          registry.Update(sig);
+         RememberDeterministicReject(fp, cacheBarTime, verdict.reason);
          continue;
         }
 
@@ -293,6 +414,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
          m_lifecycle.Transition(sig, QME_SIG_REJECTED, conf2.reason,
                                 "entry not confirmed: " + conf2.note, sig.updated);
          registry.Update(sig);
+         RememberDeterministicReject(fp, cacheBarTime, conf2.reason);
          continue;
         }
 
@@ -320,6 +442,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
                                 "score " + QmeFmt(finalScore, 1) + " < " +
                                 QmeFmt(cfg.In.minScore, 1), sig.updated);
          registry.Update(sig);
+         RememberDeterministicReject(fp, cacheBarTime, QME_REJ_LOW_SCORE);
          continue;
         }
 
@@ -332,6 +455,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
          m_lastOutcome = "signal invalid: " + QmeRejectName(vReject) + " " + vWhy;
          m_lifecycle.Transition(sig, QME_SIG_REJECTED, vReject, vWhy, sig.updated);
          registry.Update(sig);
+         RememberDeterministicReject(fp, cacheBarTime, vReject);
          continue;
         }
 
@@ -347,6 +471,7 @@ int CSignalEngine::Generate(const SMarketAnalysis &context, const SMarketAnalysi
          m_lastOutcome = "signal quality rejected: " + QmeRejectName(q.reason) + " " + q.note;
          m_lifecycle.Transition(sig, QME_SIG_REJECTED, q.reason, q.note, sig.updated);
          registry.Update(sig);
+         RememberDeterministicReject(fp, cacheBarTime, q.reason);
          continue;
         }
 

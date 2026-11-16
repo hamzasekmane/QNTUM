@@ -73,7 +73,7 @@ input string            InpNewsBlackoutWindows = "";             // GMT windows 
 
 input group "=== 7. Strategy ==="
 input double            InpMinScore            = 55.0;           // Minimum score (0..100)
-input double            InpMinConfluence       = 0.40;           // Minimum MTF confluence
+input double            InpMinConfluence       = 0.22;           // Minimum MTF confluence (5-TF weighted)
 input bool              InpRequireHtfAlignment = false;          // HTF alignment contributes to confluence; not a hard veto
 input int               InpMaxSignalsPerDay    = 12;             // Max signals per day
 input int               InpSignalExpiryMinutes = 240;            // Signal expiry (minutes)
