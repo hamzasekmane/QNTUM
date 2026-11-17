@@ -62,6 +62,27 @@ int RunRiskTests(void)
    g_kit.Begin("Unit/Test_Risk");
    const SSymbolSpec spec = RiskSpec();
 
+   // Regression coverage for both existing spread caps. The absolute limit is
+   // inclusive at 25 points; the ATR ratio remains independently enforced.
+   ENUM_QME_REJECT spreadReason = QME_REJ_NONE;
+   string spreadWhy = "";
+   const bool atAbsoluteSpreadCap = CSpreadSessionGuard::CheckSpread(
+      25.0, 0.01, spec.point, 25.0, 0.15, spreadReason, spreadWhy);
+   g_kit.Check(atAbsoluteSpreadCap && spreadReason == QME_REJ_NONE,
+               "spread at the configured absolute cap remains allowed");
+   const bool overAbsoluteSpreadCap = CSpreadSessionGuard::CheckSpread(
+      26.0, 0.01, spec.point, 25.0, 0.15, spreadReason, spreadWhy);
+   g_kit.Check(!overAbsoluteSpreadCap && spreadReason == QME_REJ_SPREAD,
+               "spread above the configured absolute cap is rejected");
+   const bool underAtrSpreadCap = CSpreadSessionGuard::CheckSpread(
+      14.0, 0.01, 0.0001, 0.0, 0.15, spreadReason, spreadWhy);
+   g_kit.Check(underAtrSpreadCap && spreadReason == QME_REJ_NONE,
+               "spread below the configured ATR-ratio cap remains allowed");
+   const bool overAtrSpreadCap = CSpreadSessionGuard::CheckSpread(
+      16.0, 0.01, 0.0001, 0.0, 0.15, spreadReason, spreadWhy);
+   g_kit.Check(!overAtrSpreadCap && spreadReason == QME_REJ_SPREAD,
+               "spread above the configured ATR-ratio cap is rejected");
+
    // Account-currency exposure uses broker tick value/tick size, not raw
    // contract*price in an arbitrary quote currency.
    const double eurMinNotional = QmeAccountCurrencyNotionalFromTick(0.01,1.10,1.0,0.00001);

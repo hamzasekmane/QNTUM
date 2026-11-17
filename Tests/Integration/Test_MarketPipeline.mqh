@@ -195,12 +195,23 @@ int RunMarketPipelineTest(void)
    const bool runtimeQuoteValid = (runtimeTicks != NULL &&
                                    runtimeTicks.CanonicalQuote(runtimeQuote, TimeTradeServer(), 300));
    if(runtimeQuoteValid)
+     {
       g_kit.Check(rt.snapshot.symbol == runtimeQuote.symbol &&
                   rt.snapshot.bid == runtimeQuote.bid && rt.snapshot.ask == runtimeQuote.ask &&
                   rt.snapshot.spreadPoints == runtimeQuote.spreadPoints &&
                   rt.snapshot.tickTime == runtimeQuote.time &&
                   rt.snapshot.tickTimeMsc == runtimeQuote.timeMsc,
                   "snapshot bid, ask, spread and tick timestamp match one canonical tick");
+      const double spreadPassedToRisk = rt.snapshot.spreadPoints;
+      ENUM_QME_REJECT snapshotRiskReject = QME_REJ_NONE;
+      string snapshotRiskWhy = "";
+      const bool snapshotRiskAccepted = CSpreadSessionGuard::CheckSpread(
+         spreadPassedToRisk, 0.0, runtimeQuote.point, spreadPassedToRisk, 0.0,
+         snapshotRiskReject, snapshotRiskWhy);
+      g_kit.Check(spreadPassedToRisk == runtimeQuote.spreadPoints && snapshotRiskAccepted &&
+                  snapshotRiskReject == QME_REJ_NONE,
+                  "risk spread guard receives the same tick-derived spread as the snapshot");
+     }
    else
       g_kit.Check(!rt.snapshot.dataValid && rt.snapshot.bid == 0.0 && rt.snapshot.ask == 0.0 &&
                   rt.snapshot.spreadPoints == 0.0 && rt.snapshot.tickTime == 0,
