@@ -227,6 +227,36 @@ def test_canonical_tick_spread_source_and_risk_flow():
     return check("canonical validated tick drives scanner and unchanged spread-risk chain, with fail-closed regressions", ok)
 
 
+def test_spread_caps_and_snapshot_risk_identity():
+    guard = read("Risk/SpreadSessionGuard.mqh")
+    config = read("Core/Config.mqh")
+    risk_tests = read("Tests/Unit/Test_Risk.mqh")
+    integration = read("Tests/Integration/Test_MarketPipeline.mqh")
+    scanner = read("Runtime/Scanner.mqh")
+    engine = read("Runtime/Engine.mqh")
+    decisions = read("Strategy/DecisionEngine.mqh")
+    risk = read("Risk/RiskEngine.mqh")
+    pretrade = read("Risk/PreTradeValidator.mqh")
+
+    ok = ("maxSpreadPoints > 0.0 && spreadPoints > maxSpreadPoints" in guard
+          and "if(ratio > maxSpreadAtrRatio)" in guard
+          and "in.maxSpreadPoints       = 0.0;" in config
+          and "in.maxSpreadAtrRatio     = 0.15;" in config
+          and "spread at the configured absolute cap remains allowed" in risk_tests
+          and "spread above the configured absolute cap is rejected" in risk_tests
+          and "spread below the configured ATR-ratio cap remains allowed" in risk_tests
+          and "spread above the configured ATR-ratio cap is rejected" in risk_tests
+          and "s.spreadPoints = spreadPoints;" in scanner
+          and "const double spread = rt.snapshot.spreadPoints;" in engine
+          and "session.tradingAllowed, atr, spread, dec)" in engine
+          and "spreadPoints, out.plan, out.risk" in decisions
+          and "atr, spreadPoints, out);" in risk
+          and "CheckSpread(spreadPoints, atr, spec.point" in pretrade
+          and "const double spreadPassedToRisk = rt.snapshot.spreadPoints;" in integration
+          and "risk spread guard receives the same tick-derived spread as the snapshot" in integration)
+    return check("absolute and ATR spread-cap boundaries plus tick-derived snapshot-to-risk spread identity", ok)
+
+
 def test_event_dispatcher_reinitializes_sink_registration():
     dispatcher = read("Core/EventDispatcher.mqh")
     engine = read("Runtime/Engine.mqh")
@@ -436,6 +466,7 @@ ALL_TESTS = [
     test_analysis_only_precedence,
     test_pipeline_data_and_topdown_regressions,
     test_canonical_tick_spread_source_and_risk_flow,
+    test_spread_caps_and_snapshot_risk_identity,
     test_event_dispatcher_reinitializes_sink_registration,
     test_quote_session_gap_regressions,
     test_candidate_validity_contract_and_repeat_suppression,
