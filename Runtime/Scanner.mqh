@@ -334,7 +334,17 @@ bool CScanner::RefreshSymbol(CSymbolRuntime &rt, const datetime gmtNow, const lo
    const string previousNote = rt.note;
    // Never reuse any part of the previous scan after a failed refresh.
    rt.InvalidateAnalysis();
-   const double spreadPoints = (double)SymbolInfoInteger(rt.symbol, SYMBOL_SPREAD);
+   SCanonicalQuote quote;
+   QmeCanonicalQuoteClear(quote);
+   CTickProcessor *ticks = m_data.Ticks(rt.symbol);
+   const datetime serverNow = TimeTradeServer();
+   const bool quoteValid = (ticks != NULL && ticks.IsFresh(300) &&
+                            ticks.CanonicalQuote(quote, serverNow, 300));
+   const double spreadPoints = quoteValid ? quote.spreadPoints : 0.0;
+   const long reportedSpreadDiagnostic = SymbolInfoInteger(rt.symbol, SYMBOL_SPREAD);
+   if(quoteValid && MathAbs((double)reportedSpreadDiagnostic - spreadPoints) >= 0.5)
+      QmeLogMsg(QME_LOG_DEBUG, "Scanner", rt.symbol + ": SYMBOL_SPREAD diagnostic=" +
+                IntegerToString((int)reportedSpreadDiagnostic) + " tick spread=" + QmeFmt(spreadPoints, 1));
 
    bool anyReady = false;
    string tfBlock[QME_TF_SLOTS];
@@ -385,9 +395,11 @@ bool CScanner::RefreshSymbol(CSymbolRuntime &rt, const datetime gmtNow, const lo
    s.symbol = rt.symbol;
    s.time = now;
    s.entryTf = rt.ctx[entry].Timeframe();
-   s.bid = SymbolInfoDouble(rt.symbol, SYMBOL_BID);
-   s.ask = SymbolInfoDouble(rt.symbol, SYMBOL_ASK);
+   s.bid = quoteValid ? quote.bid : 0.0;
+   s.ask = quoteValid ? quote.ask : 0.0;
    s.spreadPoints = spreadPoints;
+   s.tickTime = quoteValid ? quote.time : 0;
+   s.tickTimeMsc = quoteValid ? quote.timeMsc : 0;
    s.atr = rt.analysis[entry].atr;
    s.atrAvg = rt.ctx[entry].AtrAvg();
    s.rsi = rt.ctx[entry].Rsi();
@@ -423,11 +435,10 @@ bool CScanner::RefreshSymbol(CSymbolRuntime &rt, const datetime gmtNow, const lo
          dataBlock += QmeTfName(rt.ctx[i].Timeframe()) + ":" + CDataQualityGuard::Describe(tfQuality) + ";";
         }
      }
-   CTickProcessor *ticks = m_data.Ticks(rt.symbol);
-   if(ticks == NULL || !ticks.IsFresh(300))
+   if(!quoteValid)
      {
       s.dataValid = false;
-      dataBlock += "tick:missing or stale;";
+      dataBlock += "tick:missing, stale, invalid, future, or zero spread;";
      }
    s.quality = q;
    s.zoneCount = rt.zones.ActiveCount(now);

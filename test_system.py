@@ -171,6 +171,62 @@ def test_pipeline_data_and_topdown_regressions():
     return check("usable data is not vetoed by incomplete optional analysis; D1 top-down view wired", ok)
 
 
+def test_canonical_tick_spread_source_and_risk_flow():
+    processor = read("Data/TickProcessor.mqh")
+    market_data = read("Data/MarketData.mqh")
+    scanner = read("Runtime/Scanner.mqh")
+    types = read("Core/Types.mqh")
+    engine = read("Runtime/Engine.mqh")
+    decisions = read("Strategy/DecisionEngine.mqh")
+    risk = read("Risk/RiskEngine.mqh")
+    pretrade = read("Risk/PreTradeValidator.mqh")
+    guard = read("Risk/SpreadSessionGuard.mqh")
+    config = read("Core/Config.mqh")
+    suite = read("Tests/Integration/Test_MarketPipeline.mqh")
+
+    # The only non-comment SYMBOL_SPREAD reference is a discrepancy diagnostic;
+    # it must not feed quality, analysis, snapshots or risk.
+    scanner_code = "\n".join(line.split("//", 1)[0] for line in scanner.splitlines())
+    raw_spread_use = ("reportedSpreadDiagnostic = SymbolInfoInteger(rt.symbol, SYMBOL_SPREAD)" in scanner_code
+                      and "QME_LOG_DEBUG" in scanner_code
+                      and "SYMBOL_SPREAD diagnostic=" in scanner)
+    ok = ("const double sp = (t.ask - t.bid) / point;" in processor
+          and "m_spreadPoints = sp;" in processor
+          and "m_point = point;" in processor
+          and "QmeBuildCanonicalQuote(m_symbol, m_tick, m_point" in processor
+          and "!CTickProcessor::IsTickTimeFresh(tick.time, now, maxAgeSec)" in processor
+          and "t.ask <= t.bid" in processor
+          and "CanonicalQuote(quote, serverNow, 300)" in scanner
+          and "ticks.IsFresh(300)" in scanner
+          and "quoteValid ? quote.spreadPoints : 0.0" in scanner
+          and "quoteValid ? quote.bid : 0.0" in scanner
+          and "quoteValid ? quote.ask : 0.0" in scanner
+          and "s.tickTime = quoteValid ? quote.time : 0;" in scanner
+          and "if(!quoteValid)" in scanner and "s.dataValid = false;" in scanner
+          and scanner_code.count("reportedSpreadDiagnostic") == 3
+          and raw_spread_use
+          and "s.tickTimeMsc = 0;" in types
+          and "CTickProcessor* CMarketData::Ticks(const string symbol)" in market_data
+          and "return(Ticks(SymbolIndex(symbol)));" in market_data
+          and "const double spread = rt.snapshot.spreadPoints;" in engine
+          and "spreadPoints, out.plan, out.risk" in decisions
+          and "atr, spreadPoints, out);" in risk
+          and "CheckSpread(spreadPoints, atr, spec.point" in pretrade
+          and "spreadPoints > maxSpreadPoints" in guard
+          and "spreadPrice / atr" in guard
+          and "in.maxSpreadAtrRatio     = 0.15;" in config
+          and "zero-spread tick fails closed" in suite
+          and "missing tick fails closed" in suite
+          and "stale tick fails closed" in suite
+          and "future tick fails closed" in suite
+          and "invalid zero point fails closed" in suite
+          and "ask below bid fails closed" in suite
+          and "rawSpreadDiagnostic = 0" in suite
+          and "multi-symbol quotes preserve each symbol identity" in suite
+          and "snapshot bid, ask, spread and tick timestamp match one canonical tick" in suite)
+    return check("canonical validated tick drives scanner and unchanged spread-risk chain, with fail-closed regressions", ok)
+
+
 def test_event_dispatcher_reinitializes_sink_registration():
     dispatcher = read("Core/EventDispatcher.mqh")
     engine = read("Runtime/Engine.mqh")
@@ -379,6 +435,7 @@ ALL_TESTS = [
     test_executed_signals_cannot_expire,
     test_analysis_only_precedence,
     test_pipeline_data_and_topdown_regressions,
+    test_canonical_tick_spread_source_and_risk_flow,
     test_event_dispatcher_reinitializes_sink_registration,
     test_quote_session_gap_regressions,
     test_candidate_validity_contract_and_repeat_suppression,

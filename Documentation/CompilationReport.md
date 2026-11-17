@@ -2,6 +2,32 @@
 
 > Honest-status document. Labels: PASS / FAIL / BLOCKED / NOT TESTED.
 
+## P0 spread-source remediation (2026-11-17, current branch)
+
+Scope: scanner bid, ask, spread points and tick timestamp now come from a
+single validated `MqlTick` retained by `CTickProcessor`, paired with the point
+size captured for that symbol. Missing, stale (>300 seconds), invalid,
+zero-spread and future ticks fail closed. `SYMBOL_SPREAD` is used only for a
+debug discrepancy diagnostic. The existing spread-risk chain and absolute /
+ATR caps were left unchanged.
+
+| Verification | Status | Evidence |
+|---|---|---|
+| `python3 test_system.py` | **PASS** | 55/55 static checks, including canonical quote, fail-closed, multi-symbol, snapshot-to-risk flow, and unchanged cap regressions |
+| `python3 Tools/mql5check.py` | **PASS (heuristic)** | 197 files scanned; no structural errors; explicitly not a compilation proof |
+| `python3 Tools/mql5fields.py` | **PASS (heuristic)** | 0 suspicious member accesses |
+| `python3 Tools/mql5calls.py` | **PASS (heuristic)** | 0 call-arity mismatches |
+| `git diff --check` | **PASS** | no whitespace errors |
+| Updated `Tests/Integration/Test_MarketPipeline.mqh` fixtures | **NOT TESTED** | Not run under MetaTrader 5 / Strategy Tester in this environment |
+| MetaEditor compile of updated `QME_Main.mq5` and test programs | **NOT TESTED** | The historical compile result below predates this remediation and is not evidence for these edits |
+| MT5 runtime / Strategy Tester | **NOT TESTED** | No runtime execution evidence for this change |
+
+The deterministic fixtures cover positive canonical spread despite a zero raw
+spread diagnostic, zero/missing/stale/invalid/future ticks, ask below bid,
+per-symbol quote identity, and the live snapshot-to-risk propagation contract.
+Static verification does not establish that the MQL5 integration fixtures
+compile or execute on a terminal.
+
 ## Baseline (before repair)
 
 - Source: user-supplied MetaEditor log for `QME_Main.mq5`, 2026-11-10.
@@ -27,7 +53,9 @@ $ python3 Tools/mql5calls.py
 -- 0 arity mismatch(es); this is a heuristic, not a compiler
 ```
 
-## Current status
+## Historical status before the P0 remediation (2026-11-10)
+
+The rows below describe the earlier revision only; see the dated P0 report above for current verification.
 
 | Target | Status | Evidence |
 |---|---|---|
@@ -62,9 +90,7 @@ User-compiled `QME_Main.mq5` in MetaEditor with the round-2 repairs:
 0 errors, 0 warnings, 115 ms elapsed, cpu='AVX2 + FMA3'
 ```
 
-**`QME_Main.mq5` now compiles cleanly.** Progression: 101 errors /
-27 warnings → 2 / 1 → 0 / 0.
-
-Remaining compile targets: the 21 test programs under `Tests/` have not
-been compiled yet. Runtime behaviour (DEMO, tester, backtest) remains
-NOT TESTED — a clean compile proves only that the code is valid MQL5.
+**`QME_Main.mq5` compiled cleanly at that revision.** This historical result
+does not cover the P0 spread-source changes above. Remaining compile targets:
+the test programs under `Tests/` have not been compiled for this remediation.
+Runtime behaviour (DEMO, tester, backtest) remains NOT TESTED for this change.
