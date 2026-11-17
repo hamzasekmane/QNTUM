@@ -21,6 +21,66 @@ int RunMarketPipelineTest(void)
    g_kit.Check(!CTickProcessor::IsTickTimeFresh(0, 1300, 300), "missing tick time rejected");
    g_kit.Check(!CTickProcessor::IsTickTimeFresh(1000, 0, 300), "missing server time rejected");
 
+   // Canonical quote regressions: deliberately no SYMBOL_SPREAD input is
+   // provided; bid, ask, spread and both timestamps come from this MqlTick.
+   MqlTick quoteTick;
+   ZeroMemory(quoteTick);
+   quoteTick.bid = 1.10000;
+   quoteTick.ask = 1.10020;
+   quoteTick.time = 1300;
+   quoteTick.time_msc = 1300000;
+   SCanonicalQuote canonical;
+   const long rawSpreadDiagnostic = 0; // broker property may be zero while a valid tick has spread
+   const bool canonicalOk = QmeBuildCanonicalQuote("EURUSD", quoteTick, 0.00001,
+                                                    1300, 300, canonical);
+   g_kit.Check(canonicalOk && rawSpreadDiagnostic == 0 && canonical.valid && canonical.symbol == "EURUSD" &&
+               canonical.bid == quoteTick.bid && canonical.ask == quoteTick.ask &&
+               MathAbs(canonical.spreadPoints - 20.0) < 0.000001 &&
+               canonical.time == quoteTick.time && canonical.timeMsc == quoteTick.time_msc,
+               "positive tick spread produces one canonical quote independent of raw SYMBOL_SPREAD");
+
+   quoteTick.ask = quoteTick.bid;
+   g_kit.Check(!QmeBuildCanonicalQuote("EURUSD", quoteTick, 0.00001, 1300, 300, canonical),
+               "zero-spread tick fails closed");
+   quoteTick.ask = 1.10020;
+   quoteTick.time = 0;
+   g_kit.Check(!QmeBuildCanonicalQuote("EURUSD", quoteTick, 0.00001, 1300, 300, canonical),
+               "missing tick fails closed");
+   quoteTick.time = 999;
+   g_kit.Check(!QmeBuildCanonicalQuote("EURUSD", quoteTick, 0.00001, 1300, 300, canonical),
+               "stale tick fails closed at more than 300 seconds");
+   quoteTick.time = 1301;
+   g_kit.Check(!QmeBuildCanonicalQuote("EURUSD", quoteTick, 0.00001, 1300, 300, canonical),
+               "future tick fails closed");
+   quoteTick.time = 1300;
+   g_kit.Check(!QmeBuildCanonicalQuote("EURUSD", quoteTick, 0.0, 1300, 300, canonical),
+               "invalid zero point fails closed");
+   quoteTick.bid = -1.0;
+   g_kit.Check(!QmeBuildCanonicalQuote("EURUSD", quoteTick, 0.00001, 1300, 300, canonical),
+               "invalid nonpositive bid fails closed");
+   quoteTick.bid = 1.10000;
+   quoteTick.ask = 1.09990;
+   g_kit.Check(!QmeBuildCanonicalQuote("EURUSD", quoteTick, 0.00001, 1300, 300, canonical),
+               "ask below bid fails closed");
+   quoteTick.ask = 1.10020;
+   SCanonicalQuote firstSymbolQuote;
+   const bool firstSymbolOk = QmeBuildCanonicalQuote("EURUSD", quoteTick, 0.00001,
+                                                      1300, 300, firstSymbolQuote);
+   MqlTick secondSymbolTick;
+   ZeroMemory(secondSymbolTick);
+   secondSymbolTick.bid = 1.25000;
+   secondSymbolTick.ask = 1.25100;
+   secondSymbolTick.time = 1300;
+   secondSymbolTick.time_msc = 1300000;
+   SCanonicalQuote secondSymbolQuote;
+   const bool secondSymbolOk = QmeBuildCanonicalQuote("GBPUSD", secondSymbolTick, 0.00010,
+                                                       1300, 300, secondSymbolQuote);
+   g_kit.Check(firstSymbolOk && secondSymbolOk && firstSymbolQuote.symbol == "EURUSD" &&
+               secondSymbolQuote.symbol == "GBPUSD" && firstSymbolQuote.bid != secondSymbolQuote.bid &&
+               MathAbs(firstSymbolQuote.spreadPoints - 20.0) < 0.000001 &&
+               MathAbs(secondSymbolQuote.spreadPoints - 10.0) < 0.000001,
+               "multi-symbol quotes preserve each symbol identity, prices and point size");
+
    // Deterministic broker-session fixtures for the reported M15 interval.
    // Weekly times used here are deliberately explicit; runtime uses each
    // broker's SymbolInfoSessionQuote schedule rather than these test values.
@@ -128,7 +188,23 @@ int RunMarketPipelineTest(void)
      }
 
    g_kit.Check(StringLen(rt.symbol) > 0, "runtime has a symbol");
-   g_kit.Check(rt.snapshot.time > 0, "snapshot carries a timestamp");
+   g_kit.Check(rt.snapshot.time > 0, "snapshot carries a scan timestamp");
+   CTickProcessor *runtimeTicks = data.Ticks(rt.symbol);
+   SCanonicalQuote runtimeQuote;
+   QmeCanonicalQuoteClear(runtimeQuote);
+   const bool runtimeQuoteValid = (runtimeTicks != NULL &&
+                                   runtimeTicks.CanonicalQuote(runtimeQuote, TimeTradeServer(), 300));
+   if(runtimeQuoteValid)
+      g_kit.Check(rt.snapshot.symbol == runtimeQuote.symbol &&
+                  rt.snapshot.bid == runtimeQuote.bid && rt.snapshot.ask == runtimeQuote.ask &&
+                  rt.snapshot.spreadPoints == runtimeQuote.spreadPoints &&
+                  rt.snapshot.tickTime == runtimeQuote.time &&
+                  rt.snapshot.tickTimeMsc == runtimeQuote.timeMsc,
+                  "snapshot bid, ask, spread and tick timestamp match one canonical tick");
+   else
+      g_kit.Check(!rt.snapshot.dataValid && rt.snapshot.bid == 0.0 && rt.snapshot.ask == 0.0 &&
+                  rt.snapshot.spreadPoints == 0.0 && rt.snapshot.tickTime == 0,
+                  "missing or stale tick cannot leave quote values in a valid snapshot");
 
    int readySlots = 0;
    for(int i = 0; i < QME_TF_SLOTS; i++)

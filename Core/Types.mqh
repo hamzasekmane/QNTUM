@@ -756,6 +756,8 @@ struct SMarketSnapshot
   {
    string            symbol;
    datetime          time;
+   datetime          tickTime;
+   long              tickTimeMsc;
    ENUM_TIMEFRAMES   entryTf;
    double            bid;
    double            ask;
@@ -785,6 +787,8 @@ void QmeSnapshotClear(SMarketSnapshot &s)
   {
    s.symbol = "";
    s.time = 0;
+   s.tickTime = 0;
+   s.tickTimeMsc = 0;
    s.entryTf = PERIOD_CURRENT;
    s.bid = 0.0; s.ask = 0.0; s.spreadPoints = 0.0;
    s.atr = 0.0; s.atrAvg = 0.0; s.rsi = 0.0;
